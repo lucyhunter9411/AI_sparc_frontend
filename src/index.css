@@ -1,0 +1,152 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
+    monospace;
+}
+
+.small-treeitem .MuiTreeItem-iconContainer {
+  display: none !important;
+}
+
+.right-bar {
+  @media screen and (max-width: 1550px) {
+    width: 500px;
+  }
+  @media screen and (max-width: 900px) {
+    height: 90vh !important;
+  }
+  @media screen and (max-width: 620px) {
+    width: 200px !important;
+  }
+  @media screen and (max-width: 520px) {
+    width: 200px !important;
+    position: absolute;
+    left : 0;
+    z-index: 100000;
+    display: none;
+  }
+}
+
+.right-bar-screen{
+  width: 200px !important;
+  position: absolute;
+  left : 0;
+    height: 90vh !important;
+    z-index: 100;
+}
+.messagebox {
+  @media screen and (max-width: 1550px) {
+    max-width: 900px !important;
+    width: 100%;
+  }
+  @media screen and (max-width: 1260px) {
+    max-width: 500px !important;
+    width: 100%;
+  }
+  @media screen and (max-width: 900px) {
+    width: 100% !important;
+    height: 90vh !important;
+    overflow-y: auto !important;
+  }
+}
+.chatebox {
+  @media screen and (max-width: 1550px) {
+    max-width: 900px !important;
+    width: 100%;
+  }
+  @media screen and (max-width: 1260px) {
+    max-width: 500px !important;
+    width: 100%;
+  }
+  @media screen and (max-width: 900px) {
+    width: 100% !important;
+  }
+}
+
+.lecture-img {
+  width: 1000px;
+  @media screen and (max-width: 1550px) {
+    width: 750px;
+  }
+  @media screen and (max-width: 1260px) {
+    width: 350px !important;
+  }
+  @media screen and (max-width: 900px) {
+    width: 200px !important;
+  }
+}
+
+.TreeItem2iconContainer {
+  display: none;
+}
+
+.message-text-box{
+  @media screen and (max-width: 900px) {
+    width: 170px !important;
+  }
+}
+
+.alert { 
+  width: 30% !important;
+  justify-content: center;
+  margin: auto !important;
+  margin-top: 20px !important;
+  @media screen and (max-width: 900px) {
+    width: 80% !important;
+  }
+}
+
+.chat-container{
+  @media screen and (max-width: 900px) {
+    height: 90vh !important;
+    align-items: center;
+  }
+}
+
+.message-area{
+  @media screen and (max-width: 900px) {
+    height: 90vh !important;
+  }
+}
+
+
+.toggle-button {
+  position: absolute !important;
+  top: 10px;
+  left: 10px;
+  z-index: 20000;
+  background: white;
+  border-radius: 50%;
+  padding: 10px 20px;
+}
+
+.sidebar-drawer {
+  width: 250px;
+}
+
+.feedback-group{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding:  10px;
+}
+
+.like-dislike{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+}
+
+#feedbackmessage{
+  height: 10px;
+}

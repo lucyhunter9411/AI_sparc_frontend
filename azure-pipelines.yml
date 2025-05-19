@@ -1,0 +1,78 @@
+trigger:
+  branches:
+    include:
+    - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Build
+  displayName: 'Build Stage'
+  jobs:
+  - job: Build
+    displayName: 'Build Job'
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: '20.x'
+      displayName: 'Install Node.js'
+
+    - task: CmdLine@2
+      displayName: 'npm install, build, and test'
+      inputs:
+        script: |
+          npm install
+          npm run build --if-present
+
+    - task: CmdLine@2
+      displayName: 'Zip artifact for deployment'
+      inputs:
+        script: |
+          mkdir -p $(Build.ArtifactStagingDirectory)
+          cd build
+          zip -r $(Build.ArtifactStagingDirectory)/release.zip ./*
+          cd ..
+
+    - task: CmdLine@2
+      displayName: 'Verify artifact creation'
+      inputs:
+        script: |
+          echo "Listing contents of $(Build.ArtifactStagingDirectory):"
+          ls -la $(Build.ArtifactStagingDirectory)
+
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'node-app'
+        publishLocation: 'Container'
+
+- stage: Deploy
+  displayName: 'Deploy Stage'
+  dependsOn:
+  - Build
+  jobs:
+  - job: Deploy
+    displayName: 'Deploy to Azure Web App'
+    steps:
+    - download: current
+      artifact: node-app
+
+    - task: CmdLine@2
+      displayName: 'Verify downloaded artifact'
+      inputs:
+        script: |
+          echo "Listing downloaded artifacts:"
+          ls -la $(Pipeline.Workspace)/node-app
+
+    - task: AzureRmWebAppDeployment@4
+      displayName: 'Deploy to Azure Web App'
+      inputs:
+        ConnectionType: 'AzureRM'
+        azureSubscription: 'Sparc-Azure'
+        appType: 'webAppLinux'
+        WebAppName: 'app-ragfrontend-dev-wus-001'
+        packageForLinux: '$(Pipeline.Workspace)/node-app/release.zip'
+        deploymentType: 'zipDeploy'
+        enableCustomDeployment: true
+        TakeAppOfflineFlag: true
