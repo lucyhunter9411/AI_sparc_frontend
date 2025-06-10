@@ -1,7 +1,9 @@
 trigger:
   branches:
     include:
-    - main
+      - main
+      - develop
+      - release/*
 
 pool:
   vmImage: 'ubuntu-latest'
@@ -13,66 +15,149 @@ stages:
   - job: Build
     displayName: 'Build Job'
     steps:
+
     - task: NodeTool@0
       inputs:
-        versionSpec: '20.x'
+        versionSpec: '22.x'
       displayName: 'Install Node.js'
 
     - task: CmdLine@2
-      displayName: 'npm install, build, and test'
+      displayName: 'npm install and build'
       inputs:
         script: |
           npm install
           npm run build --if-present
 
     - task: CmdLine@2
+      displayName: 'Prepare output folder (build‐artifacts)'
+      inputs:
+        script: |
+          rm -rf output
+          mkdir -p output
+          cp -r .next/standalone/* output/        # Copy contents of .next/standalone (includes server.js)
+          cp -r .next output/                     # Copy the entire .next directory
+          rm -rf output/.next/cache               # Optional: Remove cache to reduce ZIP size
+          cp -r public output/                    # Copy public folder
+          cp package.json output/
+          cp package-lock.json output/
+          cp next.config.mjs output/
+
+    - task: ArchiveFiles@2
       displayName: 'Zip artifact for deployment'
       inputs:
-        script: |
-          mkdir -p $(Build.ArtifactStagingDirectory)
-          cd build
-          zip -r $(Build.ArtifactStagingDirectory)/release.zip ./*
-          cd ..
-
-    - task: CmdLine@2
-      displayName: 'Verify artifact creation'
-      inputs:
-        script: |
-          echo "Listing contents of $(Build.ArtifactStagingDirectory):"
-          ls -la $(Build.ArtifactStagingDirectory)
+        rootFolderOrFile: 'output'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/release.zip'
+        replaceExistingArchive: true
 
     - task: PublishBuildArtifacts@1
+      displayName: 'Publish build artifact'
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)'
         ArtifactName: 'node-app'
         publishLocation: 'Container'
 
-- stage: Deploy
-  displayName: 'Deploy Stage'
-  dependsOn:
-  - Build
+# Dev Deployment Stage
+- stage: Deploy_Dev
+  displayName: 'Deploy to Dev'
+  dependsOn: Build
+  condition: and(succeeded(), startsWith(variables['build.sourceBranch'], 'refs/heads/develop'))
   jobs:
-  - job: Deploy
-    displayName: 'Deploy to Azure Web App'
-    steps:
-    - download: current
-      artifact: node-app
+  - deployment: DeployDev
+    displayName: 'Deploy to Azure Web App - Dev'
+    environment:
+      name: ragmodel_dev
+    strategy:
+     runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: node-app
 
-    - task: CmdLine@2
-      displayName: 'Verify downloaded artifact'
-      inputs:
-        script: |
-          echo "Listing downloaded artifacts:"
-          ls -la $(Pipeline.Workspace)/node-app
+          - task: CmdLine@2
+            displayName: 'Verify downloaded artifact'
+            inputs:
+              script: |
+                echo "Listing downloaded artifacts:"
+                ls -la $(Pipeline.Workspace)/node-app
 
-    - task: AzureRmWebAppDeployment@4
-      displayName: 'Deploy to Azure Web App'
-      inputs:
-        ConnectionType: 'AzureRM'
-        azureSubscription: 'Sparc-Azure'
-        appType: 'webAppLinux'
-        WebAppName: 'app-ragfrontend-dev-wus-001'
-        packageForLinux: '$(Pipeline.Workspace)/node-app/release.zip'
-        deploymentType: 'zipDeploy'
-        enableCustomDeployment: true
-        TakeAppOfflineFlag: true
+          - task: AzureAppServiceManage@0
+            displayName: 'Stop the Azure Web App'
+            inputs:
+              azureSubscription: 'Sparc-Azure'
+              Action: 'Stop Azure App Service'
+              WebAppName: 'app-ragfrontend-dev-wus-001'
+
+          - task: AzureRmWebAppDeployment@5
+            displayName: 'Deploy to Azure Web App - Dev'
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: 'Sparc-Azure'
+              appType: 'webAppLinux'
+              WebAppName: 'app-ragfrontend-dev-wus-001'
+              packageForLinux: '$(Pipeline.Workspace)/node-app/release.zip'
+              RuntimeStack: 'NODE|22-lts'
+              DeploymentTypeLinux: 'zipDeploy'
+              TakeAppOfflineFlag: true
+              CleanDeploymentFlag: true
+              StartupCommand: 'node server.js'
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Start the Azure Web App'
+            inputs:
+              azureSubscription: 'Sparc-Azure'
+              Action: 'Start Azure App Service'
+              WebAppName: 'app-ragfrontend-dev-wus-001'
+
+# Stage Deployment Stage
+- stage: Deploy_Stage
+  displayName: 'Deploy to Stage'
+  dependsOn: Build
+  condition: and(succeeded(), startsWith(variables['build.sourceBranch'], 'refs/heads/release'))
+  jobs:
+  - deployment: DeployDev
+    displayName: 'Deploy to Azure Web App - Stage'
+    environment:
+      name: ragmodel_stage
+    strategy:
+     runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: node-app
+
+          - task: CmdLine@2
+            displayName: 'Verify downloaded artifact'
+            inputs:
+              script: |
+                echo "Listing downloaded artifacts:"
+                ls -la $(Pipeline.Workspace)/node-app
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Stop the Azure Web App'
+            inputs:
+              azureSubscription: 'Sparc-Azure'
+              Action: 'Stop Azure App Service'
+              WebAppName: 'app-ragfrontend-stg-wus-001'
+
+          - task: AzureRmWebAppDeployment@5
+            displayName: 'Deploy to Azure Web App - Stage'
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: 'Sparc-Azure'
+              appType: 'webAppLinux'
+              WebAppName: 'app-ragfrontend-stg-wus-001' # Update this to your actual Stage Web App name
+              packageForLinux: '$(Pipeline.Workspace)/node-app/release.zip'
+              RuntimeStack: 'NODE|22-lts'
+              DeploymentTypeLinux: 'zipDeploy'
+              TakeAppOfflineFlag: true
+              CleanDeploymentFlag: true
+              StartupCommand: 'node server.js'
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Start the Azure Web App'
+            inputs:
+              azureSubscription: 'Sparc-Azure'
+              Action: 'Start Azure App Service'
+              WebAppName: 'app-ragfrontend-stg-wus-001'
