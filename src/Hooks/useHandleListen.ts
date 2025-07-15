@@ -77,7 +77,7 @@ const useLectureStarter = ({
             startTimer();
 
             const websocket = new WebSocket(
-              `ws://localhost:8000/ws/${lectureId}/${connectrobot}`
+              `wss://app-ragbackend-dev-wus-001.azurewebsites.net/ws/${lectureId}/${connectrobot}`
             );
 
             websocket.onopen = () => {

@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import { PlayArrow, Stop, Save, Add, School } from "@mui/icons-material";
 import axios from "axios";
+import { getGreeting } from "../common";
 
 interface ContentItem {
   image?: string;
@@ -43,6 +44,18 @@ interface ContentCreatorProps {
   setTopics: any;
   setLectures: any;
   editMode: boolean;
+  snackbar: {
+    open: boolean;
+    message: string;
+    severity: "success" | "error" | "warning" | "info";
+  };
+  setSnackbar: React.Dispatch<
+    React.SetStateAction<{
+      open: boolean;
+      message: string;
+      severity: "success" | "error" | "warning" | "info";
+    }>
+  >;
 }
 
 interface AudioState {
@@ -176,6 +189,8 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
   setTopics,
   setLectures,
   editMode,
+  snackbar,
+  setSnackbar,
 }) => {
   const [openModal, setOpenModal] = useState(false);
   const [newContent, setNewContent] = useState("");
@@ -199,23 +214,6 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
     add: false,
   });
 
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    severity: "success" as "success" | "error" | "info" | "warning",
-  });
-
-  const handleSnackbarOpen = (
-    message: string,
-    severity: "success" | "error" | "info" | "warning"
-  ) => {
-    setSnackbar({
-      open: true,
-      message,
-      severity,
-    });
-  };
-
   const handleSnackbarClose = () => {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
@@ -235,7 +233,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
     formData.append("image", file);
     try {
       const response = await axios.post(
-        "http://localhost:8000/upload/",
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/`,
         formData,
         {
           headers: {
@@ -245,12 +243,15 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
       );
       const uploadedImageUrl = response.data.imageUrl;
 
-      uploadedImageUrl &&
-        handleSnackbarOpen("Image uploaded successfully!", "success");
-
       setNewImage(uploadedImageUrl);
     } catch (error) {
       console.error("Error uploading image:", error);
+    } finally {
+      setSnackbar({
+        open: true,
+        message: "Image uploaded successfully!",
+        severity: "success",
+      });
     }
   };
 
@@ -259,7 +260,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
     formData.append("image", file);
     try {
       const response = await axios.post(
-        "http://localhost:8000/upload/",
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/`,
         formData,
         {
           headers: {
@@ -288,11 +289,15 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
         },
       }));
 
-      axios.post("http://localhost:8000/imageUpdate/", updatedTopic, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      axios.post(
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/imageUpdate/`,
+        updatedTopic,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       setSelectedTopic(updatedTopic as TopicType);
       setTopics((prevTopics: any[]) => {
@@ -426,9 +431,13 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
     const payload = JSON.stringify({ text, lang });
 
     axios
-      .post<TTSResponse>("http://localhost:8000/gtts/", payload, {
-        headers: { "Content-Type": "application/json" },
-      })
+      .post<TTSResponse>(
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/gtts/`,
+        payload,
+        {
+          headers: { "Content-Type": "application/json" },
+        }
+      )
       .then((res) => {
         const audioData = `data:audio/wav;base64,${res.data.audio}`;
         const newAudio = new Audio(audioData);
@@ -483,13 +492,21 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
   };
   const handleDataUpdate = (index: number) => {
     axios
-      .post("http://localhost:8000/topicsUpdate/", selectedTopic, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
+      .post(
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/topicsUpdate/`,
+        selectedTopic,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      )
       .then(function (res) {
-        handleSnackbarOpen("Successfully Updated !", "success");
+        setSnackbar({
+          open: true,
+          message: "Updated successfully!",
+          severity: "success",
+        });
         setModifiedFields((prev) => {
           const newState = { ...prev };
           if (newState[index]) {
@@ -499,7 +516,11 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
         });
       })
       .catch(function (error) {
-        handleSnackbarOpen("Error while update!", "error");
+        setSnackbar({
+          open: true,
+          message: "Error while update!",
+          severity: "error",
+        });
         console.error("Error:", error);
       });
   };
@@ -508,13 +529,17 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
     setGeneratingIndex(index);
     axios
       .post<GeneratedTextResponse>(
-        "http://localhost:8000/generateText/",
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/generateText/`,
         new URLSearchParams({ text }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       )
       .then(async (res) => {
-        res && handleSnackbarOpen("Generated succesfully!", "success");
-
+        res &&
+          setSnackbar({
+            open: true,
+            message: "Generated succesfully!",
+            severity: "success",
+          });
         if (!selectedTopic.content) return;
 
         const updatedTopic: TopicType = {
@@ -545,7 +570,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
 
         try {
           await axios.post(
-            "http://localhost:8000/topicsUpdate/",
+            `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/topicsUpdate/`,
             updatedTopic,
             {
               headers: {
@@ -553,13 +578,18 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
               },
             }
           );
-          handleSnackbarOpen("Generated successfully!", "success");
+          setSnackbar({
+            open: true,
+            message: "Generated successfully!",
+            severity: "success",
+          });
         } catch (error) {
           console.error("Failed to update topic on server:", error);
-          handleSnackbarOpen(
-            "Generation succeeded but update failed",
-            "warning"
-          );
+          setSnackbar({
+            open: true,
+            message: "Generation succeeded but update failed",
+            severity: "error",
+          });
         }
 
         if (setTopics) {
@@ -577,7 +607,11 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
       })
       .catch((error) => {
         console.error("Error generating text:", error);
-        handleSnackbarOpen("Error generating text!", "error");
+        setSnackbar({
+          open: true,
+          message: "Error generating text!",
+          severity: "error",
+        });
         setGeneratingIndex(null);
       });
   };
@@ -605,7 +639,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
 
     try {
       const res = await axios.post(
-        "http://localhost:8000/newContent/",
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/newContent/`,
         updatedTopic,
         {
           headers: {
@@ -613,8 +647,11 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
           },
         }
       );
-
-      handleSnackbarOpen("Content added successfully!", "success");
+      setSnackbar({
+        open: true,
+        message: "Content added successfully!",
+        severity: "success",
+      });
       setSelectedTopic(res.data.message);
       setTopics((prevTopics: any[]) => {
         if (Array.isArray(prevTopics)) {
@@ -629,8 +666,17 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
       setAddContent(false);
     } catch (error) {
       console.log("Network Error!!!");
-      handleSnackbarOpen("Failed to add content", "error");
+      setSnackbar({
+        open: true,
+        message: "Failed to add content",
+        severity: "error",
+      });
     } finally {
+      setSnackbar({
+        open: true,
+        message: "saved successfully!",
+        severity: "success",
+      });
       setButtonLoading((prev) => ({ ...prev, save: false }));
     }
   };
@@ -668,23 +714,25 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
             p: 4,
             borderRadius: 2,
             backgroundColor: "background.paper",
-            boxShadow: 1,
+            // boxShadow: 1,
           }}
         >
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600 }}>
-            No Topic Selected
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Please select a topic from the menu to view or edit its content.
-          </Typography>
-          <School
+          <Box
             sx={{
-              fontSize: 80,
-              color: "primary.main",
-              opacity: 0.7,
-              mb: 2,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              mb: 1,
             }}
-          />
+          >
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              {getGreeting().greeting}
+            </Typography>
+            {getGreeting().icon}
+          </Box>
+          <Typography variant="h6" sx={{ px: 4 }}>
+            {getGreeting().message}
+          </Typography>
         </Box>
       </Container>
     );
@@ -693,13 +741,21 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
   return (
     <ScrollableContainer maxWidth={false} sx={{ py: 1 }}>
       {selectedTopic.content && (
-        <Box display="flex" justifyContent="flex-end" mb={2}>
+        <Box display="flex" justifyContent="flex-end" mb={1}>
           <Button
             variant="contained"
             size="small"
             startIcon={<Add />}
             onClick={handleOpenModal}
-            sx={{ fontSize: "0.75rem", textTransform: "capitalize" }}
+            sx={{
+              borderTopRightRadius: 20,
+              borderBottomRightRadius: 20,
+              borderTopLeftRadius: 20,
+              borderBottomLeftRadius: 20,
+              minWidth: 100,
+              fontSize: "0.75rem",
+              textTransform: "capitalize",
+            }}
           >
             Add Content
           </Button>
@@ -720,12 +776,12 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                       ? eachContent.image.startsWith("data:image") ||
                         eachContent.image.startsWith("blob:")
                         ? eachContent.image
-                        : `http://localhost:8000/static/image/${eachContent.image}`
-                      : "http://localhost:8000/static/camera.png"
+                        : `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/image/${eachContent.image}`
+                      : `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/camera.png`
                   }
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
-                    target.src = "http://localhost:8000/static/camera.png";
+                    target.src = `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/camera.png`;
                   }}
                   style={{
                     width: "100%",
@@ -784,6 +840,12 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                         : handleTTSClick(eachContent.text, "st", index)
                     }
                     sx={{
+                      borderTopRightRadius: 20,
+                      borderBottomRightRadius: 20,
+                      borderTopLeftRadius: 20,
+                      borderBottomLeftRadius: 20,
+                      minWidth: 100,
+                      mt: 1,
                       fontSize: "0.75rem",
                       textTransform: "capitalize",
                     }}
@@ -800,6 +862,12 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                     size="small"
                     onClick={() => handleDataUpdate(index)}
                     sx={{
+                      borderTopRightRadius: 20,
+                      borderBottomRightRadius: 20,
+                      borderTopLeftRadius: 20,
+                      borderBottomLeftRadius: 20,
+                      minWidth: 100,
+                      mt: 1,
                       fontSize: "0.75rem",
                       textTransform: "capitalize",
                     }}
@@ -819,6 +887,12 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                       ) : null
                     }
                     sx={{
+                      borderTopRightRadius: 20,
+                      borderBottomRightRadius: 20,
+                      borderTopLeftRadius: 20,
+                      borderBottomLeftRadius: 20,
+                      minWidth: 100,
+                      mt: 1,
                       fontSize: "0.75rem",
                       textTransform: "capitalize",
                     }}
@@ -877,6 +951,12 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                           )
                         }
                         sx={{
+                          borderTopRightRadius: 20,
+                          borderBottomRightRadius: 20,
+                          borderTopLeftRadius: 20,
+                          borderBottomLeftRadius: 20,
+                          minWidth: 100,
+                          mt: 1,
                           fontSize: "0.75rem",
                           textTransform: "capitalize",
                         }}
@@ -899,6 +979,12 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                           ])
                         }
                         sx={{
+                          borderTopRightRadius: 20,
+                          borderBottomRightRadius: 20,
+                          borderTopLeftRadius: 20,
+                          borderBottomLeftRadius: 20,
+                          minWidth: 100,
+                          mt: 1,
                           fontSize: "0.75rem",
                           textTransform: "capitalize",
                         }}
@@ -953,7 +1039,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ padding: "24px" }}>
+        <DialogContent sx={{ padding: "20px" }}>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
               <Typography
@@ -1033,7 +1119,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                       src={selectedImage}
                       alt="Preview"
                       onError={(e) => {
-                        e.currentTarget.src = `http://localhost:8000/static/camera.png`;
+                        e.currentTarget.src = `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/camera.png`;
                       }}
                       style={{
                         maxWidth: "100%",

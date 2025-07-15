@@ -135,7 +135,7 @@ const ChatUI = () => {
     }
     axios
       .post(
-        `http://localhost:8000/selectLanguage/${lectureId}`,
+        `https://app-ragbackend-dev-wus-001.azurewebsites.net/selectLanguage/${lectureId}`,
         new URLSearchParams({ languageName: curLanguage }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       )
@@ -143,7 +143,7 @@ const ChatUI = () => {
         // Start the lecture with POST request
         axios
           .post(
-            `http://localhost:8000/startLecture/${lectureId}/${topicId}`,
+            `https://app-ragbackend-dev-wus-001.azurewebsites.net/startLecture/${lectureId}/${topicId}`,
             new URLSearchParams({ connectrobot: connectrobot }),
             {
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -155,7 +155,7 @@ const ChatUI = () => {
 
             // Open WebSocket connection
             const websocket = new WebSocket(
-              `ws://localhost:8000/ws/${lectureId}/${connectrobot}`
+              `wss://app-ragbackend-dev-wus-001.azurewebsites.net/ws/${lectureId}/${connectrobot}`
             ); // Ensure lecture ID is in WebSocket URL
 
             // WebSocket event handlers
@@ -292,7 +292,7 @@ const ChatUI = () => {
       // Send the language change request
       axios
         .post(
-          `http://localhost:8000/changeLanguage/${curLectureId}`,
+          `https://app-ragbackend-dev-wus-001.azurewebsites.net/changeLanguage/${curLectureId}`,
           new URLSearchParams({ languageName: newLanguage }),
           { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
         )
@@ -403,7 +403,9 @@ const ChatUI = () => {
 
   const sendAudioToBackend = (audioBlob) => {
     if (!curLectureId) {
-      const wsk = new WebSocket("ws://localhost:8000/ws/before/lecture");
+      const wsk = new WebSocket(
+        "wss://app-ragbackend-dev-wus-001.azurewebsites.net/ws/before/lecture"
+      );
 
       wsk.onopen = () => {
         console.log("WebSocket connection established, sending audio...");
@@ -496,7 +498,7 @@ const ChatUI = () => {
   const handleCurModelChange = (event) => {
     axios
       .post(
-        "http://localhost:8000/selectModel/",
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/selectModel/",
         new URLSearchParams({ modelName: event.target.value }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       )
@@ -513,7 +515,7 @@ const ChatUI = () => {
     if (event.ctrlKey && event.shiftKey && event.key === "L") {
       setOpen(true); // Show the modal when Ctrl+Shift+P is pressed
       axios
-        .get("http://localhost:8000/prompt/", {
+        .get("https://app-ragbackend-dev-wus-001.azurewebsites.net/prompt/", {
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
         })
         .then(function (res) {
@@ -567,7 +569,7 @@ const ChatUI = () => {
   const handleApply = () => {
     setOpen(false);
     axios.post(
-      "http://localhost:8000/prompt/",
+      "https://app-ragbackend-dev-wus-001.azurewebsites.net/prompt/",
       new URLSearchParams({ prompt: myPrompt }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
@@ -594,11 +596,15 @@ const ChatUI = () => {
     };
 
     axios
-      .put("http://localhost:8000/qna/update/", qna, {
-        headers: {
-          "Content-Type": "application/json", // Use application/json
-        },
-      })
+      .put(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/qna/update/",
+        qna,
+        {
+          headers: {
+            "Content-Type": "application/json", // Use application/json
+          },
+        }
+      )
       .then(function (res) {
         const resp = res.data.response.trim();
         if (resp) {
@@ -662,7 +668,7 @@ const ChatUI = () => {
 
   useEffect(() => {
     axios
-      .get("http://localhost:8000/lectures/", {
+      .get("https://app-ragbackend-dev-wus-001.azurewebsites.net/lectures/", {
         headers: { "Content-Type": "application/json" },
       })
       .then(function (res) {
@@ -672,7 +678,7 @@ const ChatUI = () => {
         console.log("Network Error!!!");
       });
     axios
-      .get("http://localhost:8000/topics/", {
+      .get("https://app-ragbackend-dev-wus-001.azurewebsites.net/topics/", {
         headers: { "Content-Type": "application/json" },
       })
       .then(function (res) {
@@ -736,14 +742,14 @@ const ChatUI = () => {
     setIsSaveConv(event.target.checked);
     if (event.target.checked) {
       axios.post(
-        `http://localhost:8000/saveConv/${connectrobot}`,
+        `https://app-ragbackend-dev-wus-001.azurewebsites.net/saveConv/${connectrobot}`,
         new URLSearchParams({ saveConv: "save" }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
       console.log(event.target.checked);
     } else {
       axios.post(
-        `http://localhost:8000/saveConv/${connectrobot}`,
+        `https://app-ragbackend-dev-wus-001.azurewebsites.net/saveConv/${connectrobot}`,
         new URLSearchParams({ saveConv: "unsave" }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
@@ -1278,7 +1284,7 @@ const ChatUI = () => {
                         {message.image && (
                           <img
                             src={
-                              "http://localhost:8000/static/image/" +
+                              "https://app-ragbackend-dev-wus-001.azurewebsites.net/static/image/" +
                               message.image
                             }
                             onError={(e) => {

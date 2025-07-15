@@ -25,7 +25,7 @@ export const useDeleteTopic = () => {
 
     try {
       const response: AxiosResponse<DeleteTopicResponse> = await axios.post(
-        "http://localhost:8000/deleteTopic/",
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/deleteTopic/",
         send_data,
         {
           headers: { "Content-Type": "application/x-www-form-urlencoded" },

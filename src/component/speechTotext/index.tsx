@@ -24,9 +24,12 @@ import SendIcon from "@mui/icons-material/Send";
 import TimerDisplay from "../timer";
 import { School } from "@mui/icons-material";
 import axios from "axios";
+import { getGreeting } from "../common";
+
 const { saveAs } = require("file-saver");
 
 export interface Message {
+  image_path: any;
   id: number;
   text: string;
   sender: string;
@@ -48,8 +51,7 @@ interface SpeechRecognizerProps {
   curLectureId: string | null;
   currentAudio: HTMLAudioElement | null;
   setCurrentAudio: (audio: HTMLAudioElement | null) => void;
-  seconds: number;
-  minutes: number;
+
   isStart: boolean;
   ws: WebSocket | null;
   curTopicId: string | null;
@@ -62,9 +64,6 @@ interface SpeechRecognizerProps {
   STTToLanguageMap: any;
   isLastMessage: boolean;
   setIsLastMessage: (isLastMessage: boolean) => void;
-  // setLanguage;
-  // setMinutes?: (minutes: number) => void;
-  // setSeconds?: (seconds: number) => void;
 }
 
 const pulse = keyframes`
@@ -83,9 +82,9 @@ const pulse = keyframes`
 `;
 
 const equalize = keyframes`
-  0% { height: 10px; }
-  50% { height: 40px; }
-  100% { height: 10px; }
+  0% { height: 6px; }
+  50% { height: 18px; }
+  100% { height: 6px; }
 `;
 
 interface AnimatedFabProps {
@@ -113,18 +112,113 @@ interface BarProps {
 
 const Bar = styled(Box)<BarProps>(({ delay }) => ({
   width: 6,
-  height: 10,
+  height: 6, // initial height
   backgroundColor: "#9F5DE7",
   borderRadius: 2,
   animation: `${equalize} 1.2s ease-in-out infinite`,
   animationDelay: delay,
 }));
 
-const graduate = keyframes`
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+const thinkingKeyframes = keyframes`
+  0% { opacity: 0.2; transform: scale(1); }
+  20% { opacity: 1; transform: scale(1.3); }
+  100% { opacity: 0.2; transform: scale(1); }
 `;
 
+const ThinkingDots = styled("span")({
+  display: "inline-flex",
+  alignItems: "center",
+  height: 24,
+  "& span": {
+    display: "inline-block",
+    width: 8,
+    height: 8,
+    margin: "0 2px",
+    borderRadius: "50%",
+    background: "#9F5DE7",
+    opacity: 0.2,
+    animation: `${thinkingKeyframes} 1.4s infinite`,
+  },
+  "& span:nth-of-type(1)": { animationDelay: "0s" },
+  "& span:nth-of-type(2)": { animationDelay: "0.2s" },
+  "& span:nth-of-type(3)": { animationDelay: "0.4s" },
+});
+
+const CenteredOverlayLoading = ({
+  type,
+}: {
+  type: "listening" | "thinking";
+}) => (
+  <Box
+    sx={{
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      bgcolor: "#E1E9EF",
+      zIndex: 20,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      pointerEvents: "auto",
+    }}
+  >
+    <Box
+      sx={{
+        borderRadius: 3,
+        p: 4,
+        minWidth: 260,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}
+    >
+      {type === "listening" ? (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+            Listening...
+          </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 0.5,
+              height: 24,
+            }}
+          >
+            {[...Array(5)].map((_, i) => (
+              <Bar key={i} delay={`${i * 0.1}s`} />
+            ))}
+          </Box>
+        </Box>
+      ) : (
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <Typography variant="h6" color="secondary" sx={{ mb: 2 }}>
+            Thinking...
+          </Typography>
+          <ThinkingDots>
+            <span />
+            <span />
+            <span />
+          </ThinkingDots>
+        </Box>
+      )}
+    </Box>
+  </Box>
+);
 const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
   languageToSTTMap,
   STTToLanguageMap,
@@ -139,8 +233,6 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
   curLectureId,
   currentAudio,
   setCurrentAudio,
-  seconds,
-  minutes,
   isStart,
   ws,
   curTopicId,
@@ -153,8 +245,10 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
     state: { doc },
     setDoc,
   } = UseContext();
+  const wsRef = useRef<WebSocket | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const [newMessage, setNewMessage] = useState("");
+  const [isThinking, setIsThinking] = useState(false);
+
   const [updateMessage, setUpdateMessage] = useState("");
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
@@ -162,6 +256,15 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<
     number | null
   >(null);
+
+  type WebSocketState = "connected" | "disconnected" | "error" | "connecting";
+  const [webSocketState, setWebSocketState] =
+    useState<WebSocketState>("disconnected");
+  const isOverallLoading = isLoading || webSocketState === "connecting";
+
+  const showOverlay = isListening || isThinking;
+
+  const [micUsed, setMicUsed] = useState(false);
 
   const mediaRecorderRef = useRef<{
     stream: MediaStream;
@@ -203,7 +306,8 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
     borderRadius: isfullscreen === "true" ? 0 : "5px",
     width: "100%",
     maxWidth: "1200px",
-    height: isfullscreen === "true" ? "100vh" : "400px",
+    height: "100%",
+    minHeight: 0,
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
@@ -281,12 +385,31 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
     justifyContent: "center",
     height: "100%",
     width: "100%",
-    // backgroundColor: "rgba(0, 0, 0, 0.7)",
     color: "white",
   });
 
+  const MessageBubble = styled(Box, {
+    shouldForwardProp: (prop) => prop !== "isOwn",
+  })<{ isOwn: boolean }>(({ theme, isOwn }) => ({
+    maxWidth: "70%",
+    alignSelf: isOwn ? "flex-start" : "flex-end",
+    background: isOwn ? "#7F8F9A" : "#8BA0AE",
+    color: "#fff",
+    borderRadius: 16,
+    borderBottomLeftRadius: isOwn ? 4 : 16,
+    borderBottomRightRadius: isOwn ? 16 : 4,
+    padding: theme.spacing(1.2, 2),
+    margin: theme.spacing(0.5, 0),
+  }));
+
+  const isLessonMode = !!curLectureId;
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "end",
+      });
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -297,7 +420,6 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
 
   useEffect(() => {
     setIsLastMessage(currentSlideIndex === messages.length - 1);
-    console.log("Current Slide Index:", currentSlideIndex);
   }, [currentSlideIndex, messages]);
 
   useEffect(() => {
@@ -338,6 +460,20 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
     setCurrentSlideIndex(messages.length - 1);
   }, [messages]);
 
+  useEffect(() => {
+    if (currentAudio) {
+      const handleAudioEnded = () => {
+        setIsLoading(false);
+        setCurrentAudio(null);
+      };
+      currentAudio.addEventListener("ended", handleAudioEnded);
+
+      return () => {
+        currentAudio.removeEventListener("ended", handleAudioEnded);
+      };
+    }
+  }, [currentAudio, setIsLoading, setCurrentAudio]);
+
   const handleFullScreen = () => {
     const newFullScreenState = !isFullScreen;
     setIsFullScreen(newFullScreenState);
@@ -359,7 +495,7 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
     setIsLoading(true); // Show loading state
 
     axios
-      .put("http://localhost:8000/qna/update/", qna, {
+      .put(`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/qna/update/`, qna, {
         headers: {
           "Content-Type": "application/json",
         },
@@ -377,6 +513,7 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
               isOwn: false,
               answer: false,
               length: resp.length,
+              image_path: null,
             },
           ]);
         }
@@ -392,13 +529,24 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
   };
 
   const sendAudioToBackend = (audioBlob: Blob) => {
-    console.log(connectrobot);
+    if (wsRef.current) {
+      wsRef.current.onmessage = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
     if (!curLectureId) {
+      setWebSocketState("connecting");
+
       const wsk = new WebSocket(
-        `ws://localhost:8000/ws/${connectrobot}/before/lecture`
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL_WS}/ws/${connectrobot}/before/lecture`
       );
+      wsRef.current = wsk;
 
       wsk.onopen = async () => {
+        setWebSocketState("connected");
+
         console.log("WebSocket connection established, sending audio...");
         wsk.send(
           JSON.stringify({
@@ -451,10 +599,11 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
 
       wsk.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log("Received data:", data); // Log to check the data structure
+        // console.log("Received  data:", data); // Log to check the data structure
 
         // Handle the incoming audio response from the backend
         if (data.type === "user" && data.text) {
+          setIsThinking(false);
           setMessages((prevMessages) => [
             ...prevMessages,
             {
@@ -464,10 +613,12 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
               timestamp: new Date().toISOString(),
               isOwn: true,
               language: language,
+              image_path: data.image_path,
               length: data.text ? data.text.length : 0,
             },
           ]);
         } else if (data.type === "model" && data.text) {
+          setIsThinking(false);
           // Process the response text and audio
           setMessages((prevMessages) => [
             ...prevMessages,
@@ -479,6 +630,7 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
               type: "model",
               isOwn: false,
               answer: true,
+              image_path: data.image_path,
               language: language,
               length: data.text ? data.text.length : 0,
             },
@@ -502,10 +654,12 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
       };
 
       wsk.onerror = (error) => {
+        setWebSocketState("error");
         console.error("WebSocket error:", error);
       };
 
       wsk.onclose = () => {
+        setWebSocketState("disconnected");
         console.log("WebSocket connection closed");
       };
     } else if (ws && ws.readyState === WebSocket.OPEN) {
@@ -532,12 +686,16 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
   };
 
   const toggleListening = () => {
+    if (!micUsed) setMicUsed(true);
     if (isListening) {
       stopRecording();
+      setIsListening(false);
+      setIsThinking(true);
     } else {
       startRecording();
+      setIsListening(true);
+      setIsThinking(false);
     }
-    setIsListening(!isListening);
   };
 
   const startRecording = async () => {
@@ -651,12 +809,15 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
 
   const currentMessage = messages[currentSlideIndex] || {};
 
-  console.log("Current Message:", currentMessage);
   interface FullScreenViewProps {
     currentMessage: Message;
     handleFullScreen: () => void;
     isLoading: boolean;
     isListening: boolean;
+    isLessonMode: boolean;
+    messages: Message[];
+    showText: boolean;
+    showOverlay: boolean;
   }
 
   const FullScreenView: React.FC<FullScreenViewProps> = ({
@@ -664,6 +825,10 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
     handleFullScreen,
     isLoading,
     isListening,
+    isLessonMode,
+    messages,
+    showText,
+    showOverlay,
   }) => (
     <Box
       sx={{
@@ -692,99 +857,149 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
           color: "white",
         }}
       >
-        {isLoading && (
-          <Box
-            sx={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              minHeight: "300px",
-            }}
-          >
-            <LoadingSpinner />
-          </Box>
-        )}
+        <FullScreenButton
+          isfullscreen="true"
+          onClick={handleFullScreen}
+          size="small"
+          sx={{
+            position: "absolute",
+            top: 24,
+            right: 24,
+            backgroundColor: "rgba(255,255,255,0.9)",
+            zIndex: 2001,
+          }}
+        >
+          <FullscreenExitIcon />
+        </FullScreenButton>
 
-        {isListening ? (
-          <ListeningContainer>
-            <Typography variant="h6" color="#9F5DE7" mb={3}>
-              Listening...
-            </Typography>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: 0.5,
-                height: 40,
-                mb: 4,
-              }}
-            >
-              {[...Array(5)].map((_, i) => (
-                <Bar key={i} delay={`${i * 0.1}s`} />
-              ))}
-            </Box>
-            {/* <Fab
-              variant="extended"
-              color="secondary"
-              onClick={toggleListening}
-              sx={{ zIndex: 2001 }}
-            >
-              Cancel
-            </Fab> */}
-          </ListeningContainer>
-        ) : currentMessage.text ? (
+        {isLessonMode ? (
+          // Lesson UI (existing)
           <>
-            <FullScreenButton
-              isfullscreen="true"
-              onClick={handleFullScreen}
-              size="small"
-              sx={{
-                position: "absolute",
-                top: 24,
-                right: 24,
-                backgroundColor: "rgba(255,255,255,0.9)",
-                zIndex: 2001,
-              }}
-            >
-              <FullscreenExitIcon />
-            </FullScreenButton>
+            {isLoading && (
+              <Box
+                sx={{
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  minHeight: "300px",
+                }}
+              >
+                <CircularProgress />
+              </Box>
+            )}
 
-            <ContentWrapper isfullscreen="true">
-              {currentMessage.image && (
-                <ImageContainer isfullscreen="true">
-                  <img
-                    src={`http://localhost:8000/static/image/${currentMessage.image}`}
-                    style={{
-                      maxWidth: "100%",
-                      maxHeight: "70vh",
-                      objectFit: "contain",
-                    }}
-                    alt="Content visual"
-                  />
-                </ImageContainer>
-              )}
-              {showText && (
-                <Typography
-                  variant="body1"
-                  sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
-                >
-                  {currentMessage.text}
+            {currentMessage.text ? (
+              <ContentWrapper isfullscreen="true">
+                {currentMessage.image && (
+                  <ImageContainer isfullscreen="true">
+                    <img
+                      src={`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/image/${currentMessage.image}`}
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "70vh",
+                        objectFit: "contain",
+                      }}
+                      alt="Content visual"
+                    />
+                  </ImageContainer>
+                )}
+                {showText && (
+                  <Typography
+                    variant="body1"
+                    sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
+                  >
+                    {currentMessage.text}
+                  </Typography>
+                )}
+              </ContentWrapper>
+            ) : (
+              <EmptyStateContainer sx={{ color: "white" }}>
+                <Typography variant="h6" sx={{ fontStyle: "italic", px: 4 }}>
+                  {!isLoading &&
+                    "I am SPARC. Select a lesson or tap the mic to speak to me."}
                 </Typography>
-              )}
-            </ContentWrapper>
-
-            {/* <Box sx={{ borderTop: "1px solid", borderColor: "divider" }}>
-              <IconButton size="small" sx={{ color: "white" }}>
-                <ThumbDownIcon fontSize="small" />
-              </IconButton>
-            </Box> */}
+              </EmptyStateContainer>
+            )}
           </>
         ) : (
-          <EmptyStateContainer sx={{ color: "white" }}>
-            <Typography variant="h6" sx={{ fontStyle: "italic", px: 4 }}>
-              {!isLoading && "Select a lesson from the menu to begin"}
-            </Typography>
-          </EmptyStateContainer>
+          // Chat UI (new)
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              width: "100%",
+              p: 2,
+              overflowY: "auto",
+              position: "relative",
+            }}
+          >
+            {showText &&
+              messages.map((msg, idx) => (
+                <Box
+                  key={msg.id || idx}
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: msg.isOwn ? "flex-start" : "flex-end",
+                  }}
+                >
+                  {!msg.isOwn && msg.image_path && (
+                    <Box
+                      sx={{
+                        width: "70%",
+                        mb: 1,
+                        display: "flex",
+                        justifyContent: "flex-start",
+                      }}
+                    >
+                      <img
+                        src={`${msg.image_path}`}
+                        alt="Message visual"
+                        style={{
+                          width: "100%",
+                          borderRadius: 12,
+                          objectFit: "cover",
+                          background: "#eee",
+                        }}
+                      />
+                    </Box>
+                  )}
+                  <MessageBubble isOwn={!!msg.isOwn}>
+                    <Typography
+                      variant="body2"
+                      sx={{ wordBreak: "break-word" }}
+                    >
+                      {msg.text}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        textAlign: msg.isOwn ? "left" : "right",
+                        opacity: 0.6,
+                        mt: 0.5,
+                      }}
+                    >
+                      {msg.isOwn
+                        ? "You"
+                        : msg.timestamp
+                        ? new Date(msg.timestamp).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </Typography>
+                  </MessageBubble>
+                </Box>
+              ))}
+            {showOverlay && (
+              <CenteredOverlayLoading
+                type={isListening ? "listening" : "thinking"}
+              />
+            )}
+            {/* <div ref={messagesEndRef} /> */}
+          </Box>
         )}
       </Box>
     </Box>
@@ -798,6 +1013,11 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
           handleFullScreen={handleFullScreen}
           isLoading={isLoading}
           isListening={isListening}
+          isLessonMode={isLessonMode}
+          messages={messages}
+          showText={showText}
+          showOverlay={showOverlay}
+          // messagesEndRef={messagesEndRef}
         />
       ) : (
         <SlideContainer isfullscreen={isFullScreen.toString()}>
@@ -805,152 +1025,338 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
             isfullscreen={isFullScreen.toString()}
             elevation={isFullScreen ? 0 : 3}
           >
-            {isLoading && (
-              <Box
-                sx={{
-                  position: "relative",
-                  width: "100%",
-                  height: "100%",
-                  minHeight: "300px",
-                }}
-              >
-                <LoadingSpinner />
-              </Box>
-            )}
+            {messages.length === 0 &&
+              !isListening &&
+              !isLoading &&
+              webSocketState === "disconnected" &&
+              !micUsed && (
+                <EmptyStateContainer>
+                  <Box>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        mb: 1,
+                      }}
+                    >
+                      <Typography variant="h5" sx={{ fontWeight: 600 }}>
+                        {getGreeting().greeting}
+                      </Typography>
+                      {getGreeting().icon}
+                    </Box>
+                    <Typography variant="h6" sx={{ px: 4 }}>
+                      {getGreeting().message}
+                    </Typography>
+                  </Box>
+                </EmptyStateContainer>
+              )}
+            {isLessonMode ? (
+              <>
+                {isLoading && (
+                  <Box
+                    sx={{
+                      position: "relative",
+                      width: "100%",
+                      height: "100%",
+                      minHeight: "300px",
+                    }}
+                  >
+                    <LoadingSpinner />
+                  </Box>
+                )}
 
-            {isListening ? (
-              <ListeningContainer>
-                <Typography variant="h6" color="#9F5DE7" mb={3}>
-                  Listening...
-                </Typography>
+                {currentMessage.text && (
+                  <>
+                    <FullScreenButton
+                      isfullscreen={isFullScreen.toString()}
+                      onClick={handleFullScreen}
+                      size="small"
+                    >
+                      {isFullScreen ? (
+                        <FullscreenExitIcon />
+                      ) : (
+                        <FullscreenIcon />
+                      )}
+                    </FullScreenButton>
+
+                    <ContentWrapper isfullscreen={isFullScreen.toString()}>
+                      {currentMessage.image && (
+                        <ImageContainer isfullscreen={isFullScreen.toString()}>
+                          <img
+                            src={`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/image/${currentMessage.image}`}
+                            className="lecture-img"
+                            style={{
+                              maxWidth: "100%",
+                              maxHeight: isFullScreen ? "75vh" : "50vh",
+                              objectFit: "contain",
+                            }}
+                            alt="Content visual"
+                          />
+                        </ImageContainer>
+                      )}
+                      {showText && (
+                        <Typography
+                          variant="body1"
+                          sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
+                        >
+                          {currentMessage.text}
+                        </Typography>
+                      )}
+                    </ContentWrapper>
+
+                    {/* commented due to feedback feature not being used */}
+                    {/* {currentMessage.id && (
+                <Box sx={{ borderTop: "1px solid", borderColor: "divider" }}>
+                  <IconButton size="small">
+                    <ThumbDownIcon
+                      key={currentSlideIndex}
+                      fontSize="small"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        setSelectedMessageIndex((prevIndex) =>
+                          prevIndex === currentSlideIndex
+                            ? null
+                            : currentSlideIndex
+                        );
+                        setUpdateMessage("");
+                      }}
+                    />
+                  </IconButton>
+                </Box>
+              )} */}
+                    {/* {selectedMessageIndex === currentSlideIndex && (
                 <Box
                   sx={{
                     display: "flex",
-                    alignItems: "flex-end",
-                    gap: 0.5,
-                    height: 40,
-                    mb: 4,
+                    alignItems: "center",
+                    gap: 1,
+                    mt: 1,
                   }}
                 >
-                  {[...Array(5)].map((_, i) => (
-                    <Bar key={i} delay={`${i * 0.1}s`} />
-                  ))}
-                </Box>
-              </ListeningContainer>
-            ) : currentMessage.text ? (
-              <>
-                <FullScreenButton
-                  isfullscreen={isFullScreen.toString()}
-                  onClick={handleFullScreen}
-                  size="small"
-                >
-                  {isFullScreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
-                </FullScreenButton>
-
-                <ContentWrapper isfullscreen={isFullScreen.toString()}>
-                  {currentMessage.image && (
-                    <ImageContainer isfullscreen={isFullScreen.toString()}>
-                      <img
-                        src={`http://localhost:8000/static/image/${currentMessage.image}`}
-                        className="lecture-img"
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: isFullScreen ? "75vh" : "50vh",
-                          objectFit: "contain",
-                        }}
-                        alt="Content visual"
-                      />
-                    </ImageContainer>
-                  )}
-                  {showText && (
-                    <Typography
-                      variant="body1"
-                      sx={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}
-                    >
-                      {currentMessage.text}
-                    </Typography>
-                  )}
-                </ContentWrapper>
-
-                {/* commented due to feedback feature not being used */}
-                {/* {currentMessage.id && (
-                  <Box sx={{ borderTop: "1px solid", borderColor: "divider" }}>
-                    <IconButton size="small">
-                      <ThumbDownIcon
-                        key={currentSlideIndex}
-                        fontSize="small"
-                        style={{ cursor: "pointer" }}
-                        onClick={() => {
-                          setSelectedMessageIndex((prevIndex) =>
-                            prevIndex === currentSlideIndex
-                              ? null
-                              : currentSlideIndex
-                          );
-                          setUpdateMessage("");
-                        }}
-                      />
-                    </IconButton>
-                  </Box>
-                )} */}
-                {/* {selectedMessageIndex === currentSlideIndex && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      mt: 1,
-                    }}
+                  <TextField
+                    fullWidth
+                    variant="outlined"
+                    // disabled={disabledTyping}
+                    placeholder="Type your feedback..."
+                    value={updateMessage}
+                    id="feedbackmessage"
+                    onChange={(e) => handleUpdateTyping(e)}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" && handleUpdateResponse()
+                    }
+                  />
+                  <IconButton
+                    color="primary"
+                    onClick={handleUpdateResponse}
+                    disabled={!updateMessage.trim()}
                   >
-                    <TextField
-                      fullWidth
-                      variant="outlined"
-                      // disabled={disabledTyping}
-                      placeholder="Type your feedback..."
-                      value={updateMessage}
-                      id="feedbackmessage"
-                      onChange={(e) => handleUpdateTyping(e)}
-                      onKeyPress={(e) =>
-                        e.key === "Enter" && handleUpdateResponse()
-                      }
-                    />
-                    <IconButton
-                      color="primary"
-                      onClick={handleUpdateResponse}
-                      disabled={!updateMessage.trim()}
-                    >
-                      <SendIcon />
-                    </IconButton>
-                  </Box>
-                )} */}
+                    <SendIcon />
+                  </IconButton>
+                </Box>
+              )} */}
+                  </>
+                )}
               </>
             ) : (
-              <EmptyStateContainer>
-                <Typography
-                  variant="h6"
+              <>
+                <Box
                   sx={{
-                    color: "text.secondary",
-                    fontStyle: "italic",
-                    px: 4,
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                    width: "100%",
+                    p: 2,
+                    overflowY: "auto",
+                    bgcolor: "background.default",
+                    "&::-webkit-scrollbar": {
+                      width: "6px",
+                    },
+                    "&::-webkit-scrollbar-thumb": {
+                      backgroundColor: "rgba(0,0,0,0.2)",
+                      borderRadius: "4px",
+                    },
                   }}
                 >
-                  {!isLoading && "Select a lesson from the menu to begin"}
-                </Typography>
-              </EmptyStateContainer>
+                  <FullScreenButton
+                    isfullscreen={isFullScreen.toString()}
+                    onClick={handleFullScreen}
+                    size="small"
+                    sx={{
+                      top: 8,
+                      right: 8,
+                      position: "absolute",
+                      zIndex: 10,
+                    }}
+                  >
+                    {isFullScreen ? <FullscreenExitIcon /> : <FullscreenIcon />}
+                  </FullScreenButton>
+                  {!showText &&
+                    (() => {
+                      const lastImageMsg = [...messages]
+                        .reverse()
+                        .find((msg) => msg.image_path);
+                      return lastImageMsg ? (
+                        <Box
+                          key={lastImageMsg.id}
+                          sx={{
+                            width: "100%",
+                            height: "100%",
+                            minHeight: 240,
+                            mb: 1,
+                            display: "flex",
+                            justifyContent: "flex-start",
+                            alignItems: "stretch",
+                            position: "relative",
+                          }}
+                        >
+                          <img
+                            src={`${lastImageMsg.image_path}`}
+                            alt="Message visual"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              minHeight: 240,
+                              borderRadius: 12,
+                              objectFit: "contain",
+                              display: "block",
+                            }}
+                          />
+                        </Box>
+                      ) : null;
+                    })()}
+                  {showText &&
+                    messages.map((msg, idx) => (
+                      <Box
+                        key={msg.id || idx}
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: msg.isOwn ? "flex-start" : "flex-end",
+                        }}
+                      >
+                        {!msg.isOwn && msg.image_path && (
+                          <Box
+                            sx={{
+                              width: "70%",
+                              mb: 1,
+                              display: "flex",
+                              justifyContent: "flex-start",
+                            }}
+                          >
+                            <img
+                              src={`${msg.image_path}`}
+                              alt="Message visual"
+                              style={{
+                                width: "100%",
+                                borderRadius: 12,
+                                objectFit: "cover",
+                                // maxHeight: 180,
+                                background: "#eee",
+                              }}
+                            />
+                          </Box>
+                        )}
+                        <MessageBubble isOwn={!!msg.isOwn}>
+                          <Typography
+                            variant="body2"
+                            sx={{ wordBreak: "break-word" }}
+                          >
+                            {msg.text}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display: "block",
+                              textAlign: msg.isOwn ? "left" : "right",
+                              opacity: 0.6,
+                              mt: 0.5,
+                            }}
+                          >
+                            {msg.isOwn
+                              ? "You"
+                              : msg.timestamp
+                              ? new Date(msg.timestamp).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : ""}
+                          </Typography>
+                        </MessageBubble>
+                      </Box>
+                    ))}
+
+                  {showOverlay && (
+                    <CenteredOverlayLoading
+                      type={isListening ? "listening" : "thinking"}
+                    />
+                  )}
+                  <div ref={messagesEndRef} />
+                </Box>
+              </>
             )}
           </SlideContent>
         </SlideContainer>
       )}
+      {/* <TimerDisplay minutes={minutes} seconds={seconds} /> */}
 
-      <Tooltip title={isListening ? "Stop recording" : "Start recording"}>
+      {currentAudio && !currentAudio.paused ? (
+        <Box
+          sx={{
+            position: "fixed",
+            bottom: 24,
+            right: 24,
+            zIndex: 1201,
+            width: 56,
+            height: 56,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "50%",
+          }}
+        >
+          <Box sx={{ display: "flex", gap: 0.5 }}>
+            {[0, 1, 2].map((i) => (
+              <Box
+                key={i}
+                sx={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  background: "black",
+                  animation: "dotFlashing 1s infinite linear",
+                  animationDelay: `${i * 0.2}s`,
+                  "@keyframes dotFlashing": {
+                    "0%": { opacity: 0.2 },
+                    "50%": { opacity: 1 },
+                    "100%": { opacity: 0.2 },
+                  },
+                }}
+              />
+            ))}
+          </Box>
+        </Box>
+      ) : (
         <AnimatedFab
-          disabled={!isLastMessage || isStart || isLoading}
+          disabled={
+            !!(
+              !isLastMessage ||
+              isStart ||
+              isLoading ||
+              isThinking ||
+              (!isListening &&
+                messages.length > 0 &&
+                messages[messages.length - 1]?.isOwn === true) ||
+              (currentAudio && !currentAudio.paused)
+            )
+          }
           islistening={isListening.toString()}
           onClick={toggleListening}
           aria-label={isListening ? "Stop listening" : "Start listening"}
         >
           <MicIcon />
         </AnimatedFab>
-      </Tooltip>
+      )}
     </>
   );
 };

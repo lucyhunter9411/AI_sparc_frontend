@@ -1,3 +1,12 @@
+# This pipeline sets the build number using variables from a linked group,
+# builds a Node.js application, publishes it, and then deploys it to an Azure Web App,
+# updating an app setting with the generated build number.
+
+# The 'name' property defines the format of the build number.
+# It uses variables from the linked variable group and $(Rev:r) for a unique revision.
+# IMPORTANT: Ensure 'ragfrontend-global-vars' contains MajorVersion, MinorVersion.
+name: 'v$(MajorVersion).$(MinorVersion).$(ReleaseVersion).$(Date:yyyyMMdd).$(Rev:r)'
+
 trigger:
   branches:
     include:
@@ -8,6 +17,11 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+- group: ragfrontend-global-vars
+- name: system.debug
+  value: true
+
 stages:
 - stage: Build
   displayName: 'Build Stage'
@@ -15,11 +29,20 @@ stages:
   - job: Build
     displayName: 'Build Job'
     steps:
-
+  
     - task: NodeTool@0
       inputs:
         versionSpec: '22.x'
       displayName: 'Install Node.js'
+
+    # Replace NEXT_PUBLIC_VERSION in .env file with build.buildNumber
+    - script: |
+        cat << EOF > .env
+        NEXT_PUBLIC_VERSION=$(Build.BuildNumber)
+        NEXT_PUBLIC_V2_SERVER_URL=https://app-ragbackend-dev-wus-001.azurewebsites.net
+        NEXT_PUBLIC_V2_SERVER_URL_WS=wss://app-ragbackend-dev-wus-001.azurewebsites.net
+        EOF
+      displayName: 'Update .env with build number and other variables'
 
     - task: CmdLine@2
       displayName: 'npm install and build'
@@ -58,6 +81,7 @@ stages:
         ArtifactName: 'node-app'
         publishLocation: 'Container'
 
+
 # Dev Deployment Stage
 - stage: Deploy_Dev
   displayName: 'Deploy to Dev'
@@ -66,6 +90,9 @@ stages:
   jobs:
   - deployment: DeployDev
     displayName: 'Deploy to Azure Web App - Dev'
+    variables:
+    - group: ragfrontend-dev-vars
+
     environment:
       name: ragmodel_dev
     strategy:
@@ -102,6 +129,7 @@ stages:
               TakeAppOfflineFlag: true
               CleanDeploymentFlag: true
               StartupCommand: 'node server.js'
+              AppSettings: '-NEXT_PUBLIC_V2_SERVER_URL "$(BackEndServer_URL)" -NEXT_PUBLIC_VERSION "$(Build.BuildNumber)"'
 
           - task: AzureAppServiceManage@0
             displayName: 'Start the Azure Web App'
@@ -161,3 +189,55 @@ stages:
               azureSubscription: 'Sparc-Azure'
               Action: 'Start Azure App Service'
               WebAppName: 'app-ragfrontend-stg-wus-001'
+
+# Stage Deployment Prod
+- stage: Deploy_Prod
+  displayName: 'Deploy to Prod'
+  dependsOn: Deploy_Stage
+  condition: and(succeeded(), startsWith(variables['build.sourceBranch'], 'refs/heads/release'))
+  jobs:
+  - deployment: DeployDev
+    displayName: 'Deploy to Azure Web App - Prod'
+    environment:
+      name: ragmodel_Prod
+    strategy:
+     runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: node-app
+
+          - task: CmdLine@2
+            displayName: 'Verify downloaded artifact'
+            inputs:
+              script: |
+                echo "Listing downloaded artifacts:"
+                ls -la $(Pipeline.Workspace)/node-app
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Stop the Azure Web App'
+            inputs:
+              azureSubscription: 'Sparc-Azure'
+              Action: 'Stop Azure App Service'
+              WebAppName: 'app-ragfrontend-prod-wus2-001'
+
+          - task: AzureRmWebAppDeployment@5
+            displayName: 'Deploy to Azure Web App - Stage'
+            inputs:
+              ConnectionType: 'AzureRM'
+              azureSubscription: 'Sparc-Azure'
+              appType: 'webAppLinux'
+              WebAppName: 'app-ragfrontend-prod-wus2-001' # Update this to your actual Stage Web App name
+              packageForLinux: '$(Pipeline.Workspace)/node-app/release.zip'
+              RuntimeStack: 'NODE|22-lts'
+              DeploymentTypeLinux: 'zipDeploy'
+              TakeAppOfflineFlag: true
+              CleanDeploymentFlag: true
+              StartupCommand: 'node server.js'
+
+          - task: AzureAppServiceManage@0
+            displayName: 'Start the Azure Web App'
+            inputs:
+              azureSubscription: 'Sparc-Azure'
+              Action: 'Start Azure App Service'
+              WebAppName: 'app-ragfrontend-prod-wus2-001'

@@ -95,7 +95,7 @@ const AdminPage = () => {
 
   useEffect(() => {
     axios
-      .get("http://localhost:8000/lectures/", {
+      .get("https://app-ragbackend-dev-wus-001.azurewebsites.net/lectures/", {
         headers: { "Content-Type": "application/json" },
       })
       .then(function (res) {
@@ -105,7 +105,7 @@ const AdminPage = () => {
         console.log("Network Error!!!");
       });
     axios
-      .get("http://localhost:8000/topics/", {
+      .get("https://app-ragbackend-dev-wus-001.azurewebsites.net/topics/", {
         headers: { "Content-Type": "application/json" },
       })
       .then(function (res) {
@@ -209,9 +209,13 @@ const AdminPage = () => {
     const payload = JSON.stringify({ text: text, lang: lang });
 
     axios
-      .post("http://localhost:8000/gtts/", payload, {
-        headers: { "Content-Type": "application/json" },
-      })
+      .post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/gtts/",
+        payload,
+        {
+          headers: { "Content-Type": "application/json" },
+        }
+      )
       .then((res) => {
         const newAudio = new Audio(`data:audio/wav;base64,${res.data.audio}`);
 
@@ -267,11 +271,15 @@ const AdminPage = () => {
   };
   const handleDataUpdate = () => {
     axios
-      .post("http://localhost:8000/topicsUpdate/", selectedTopic, {
-        headers: {
-          "Content-Type": "application/json", // Set content type as JSON
-        },
-      })
+      .post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/topicsUpdate/",
+        selectedTopic,
+        {
+          headers: {
+            "Content-Type": "application/json", // Set content type as JSON
+          },
+        }
+      )
       .then(function (res) {
         alert("Successfully Updated!");
       })
@@ -296,7 +304,7 @@ const AdminPage = () => {
     // console.log(formData);
     try {
       const response = await axios.post(
-        "http://localhost:8000/upload/",
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/upload/",
         formData,
         {
           headers: {
@@ -318,11 +326,15 @@ const AdminPage = () => {
       updatedTopic.content = updatedContent;
       //   console.log(updatedTopic);
 
-      axios.post("http://localhost:8000/imageUpdate/", updatedTopic, {
-        headers: {
-          "Content-Type": "application/json", // Set content type as JSON
-        },
-      });
+      axios.post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/imageUpdate/",
+        updatedTopic,
+        {
+          headers: {
+            "Content-Type": "application/json", // Set content type as JSON
+          },
+        }
+      );
 
       setSelectedTopic(updatedTopic);
       setTopics((prevTopics) => {
@@ -345,7 +357,7 @@ const AdminPage = () => {
   const generateData = (text, index) => {
     axios
       .post(
-        "http://localhost:8000/generateText/",
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/generateText/",
         new URLSearchParams({ text: text }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       )
@@ -366,11 +378,15 @@ const AdminPage = () => {
 
         setSelectedTopic(updatedTopic);
 
-        axios.post("http://localhost:8000/topicsUpdate/", updatedTopic, {
-          headers: {
-            "Content-Type": "application/json", // Set content type as JSON
-          },
-        });
+        axios.post(
+          "https://app-ragbackend-dev-wus-001.azurewebsites.net/topicsUpdate/",
+          updatedTopic,
+          {
+            headers: {
+              "Content-Type": "application/json", // Set content type as JSON
+            },
+          }
+        );
         setTopics((prevTopics) => {
           if (Array.isArray(prevTopics)) {
             return prevTopics.map((topic) =>
@@ -390,9 +406,12 @@ const AdminPage = () => {
     if (event.ctrlKey && event.shiftKey && event.key === "L") {
       setOpen(true); // Show the modal when Ctrl+Shift+P is pressed
       axios
-        .get("http://localhost:8000/promptGenerate/", {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        })
+        .get(
+          "https://app-ragbackend-dev-wus-001.azurewebsites.net/promptGenerate/",
+          {
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          }
+        )
         .then(function (res) {
           console.log("promptResponse", res.data.prompt);
           setPrompt(res.data.prompt);
@@ -418,7 +437,7 @@ const AdminPage = () => {
   const handleApply = () => {
     setOpen(false);
     axios.post(
-      "http://localhost:8000/promptGenerate/",
+      "https://app-ragbackend-dev-wus-001.azurewebsites.net/promptGenerate/",
       new URLSearchParams({ prompt: myPrompt }),
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
@@ -437,7 +456,7 @@ const AdminPage = () => {
     formData.append("image", file);
     try {
       const response = await axios.post(
-        "http://localhost:8000/upload/",
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/upload/",
         formData,
         {
           headers: {
@@ -480,11 +499,15 @@ const AdminPage = () => {
     console.log(updatedTopic);
 
     axios
-      .post("http://localhost:8000/newContent/", updatedTopic, {
-        headers: {
-          "Content-Type": "application/json", // Set content type as JSON
-        },
-      })
+      .post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/newContent/",
+        updatedTopic,
+        {
+          headers: {
+            "Content-Type": "application/json", // Set content type as JSON
+          },
+        }
+      )
       .then(function (res) {
         console.log(res.data);
 
@@ -534,9 +557,13 @@ const AdminPage = () => {
     send_data.append("qna_time", parseInt(addQATime) || 0);
 
     axios
-      .post("http://localhost:8000/addTopic/", send_data, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      })
+      .post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/addTopic/",
+        send_data,
+        {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      )
       .then(function (res) {
         console.log(res.data.topic);
 
@@ -575,9 +602,13 @@ const AdminPage = () => {
     send_data.append("title", newLectureTitle); // Send title as form data
 
     axios
-      .post("http://localhost:8000/addLecture/", send_data, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      })
+      .post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/addLecture/",
+        send_data,
+        {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      )
       .then(function (res) {
         setLectures(res.data.lecture);
         setAddLecture(false);
@@ -602,9 +633,13 @@ const AdminPage = () => {
     send_data.append("topicID", deleteTopicId); // Send title as form data
 
     axios
-      .post("http://localhost:8000/deleteTopic/", send_data, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      })
+      .post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/deleteTopic/",
+        send_data,
+        {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      )
       .then(function (res) {
         setTopics(res.data.topic);
         setOpenDeleteDialog(false);
@@ -630,9 +665,13 @@ const AdminPage = () => {
     send_data.append("lectureID", deleteLectureId); // Send title as form data
 
     axios
-      .post("http://localhost:8000/deleteLecture/", send_data, {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      })
+      .post(
+        "https://app-ragbackend-dev-wus-001.azurewebsites.net/deleteLecture/",
+        send_data,
+        {
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        }
+      )
       .then(function (res) {
         setLectures(res.data.lecture);
         setOpenDeleteLectureDialog(false);
@@ -722,11 +761,12 @@ const AdminPage = () => {
                     <img
                       src={
                         newImage
-                          ? "http://localhost:8000/static/image/" + newImage
-                          : "http://localhost:8000/static/camera.png"
+                          ? "https://app-ragbackend-dev-wus-001.azurewebsites.net/static/image/" +
+                            newImage
+                          : "https://app-ragbackend-dev-wus-001.azurewebsites.net/static/camera.png"
                       }
                       onError={(e) => {
-                        e.currentTarget.src = `http://localhost:8000/static/camera.png`;
+                        e.currentTarget.src = `https://app-ragbackend-dev-wus-001.azurewebsites.net/static/camera.png`;
                       }}
                       style={{
                         width: "100%",
@@ -1162,12 +1202,12 @@ const AdminPage = () => {
                               <img
                                 src={
                                   eachContent.image
-                                    ? "http://localhost:8000/static/image/" +
+                                    ? "https://app-ragbackend-dev-wus-001.azurewebsites.net/static/image/" +
                                       eachContent.image
-                                    : "http://localhost:8000/static/camera.png"
+                                    : "https://app-ragbackend-dev-wus-001.azurewebsites.net/static/camera.png"
                                 }
                                 onError={(e) => {
-                                  e.currentTarget.src = `http://localhost:8000/static/camera.png`;
+                                  e.currentTarget.src = `https://app-ragbackend-dev-wus-001.azurewebsites.net/static/camera.png`;
                                 }}
                                 style={{
                                   width: "100%",

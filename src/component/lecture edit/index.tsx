@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import * as yup from "yup";
 import {
   IconButton,
   Dialog,
@@ -29,6 +30,7 @@ import {
   Check as CheckIcon,
   Edit as EditIcon,
 } from "@mui/icons-material";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { SimpleTreeView, TreeItem } from "@mui/x-tree-view";
 import axios from "axios";
 
@@ -45,7 +47,7 @@ interface Topic {
 
 interface CustomTreeItemProps {
   itemId: string;
-  label: string;
+  label: React.ReactNode;
   children?: React.ReactNode;
   onClick?: () => void;
 }
@@ -66,6 +68,18 @@ interface LectureEditorProps {
   setEditMode: (mode: boolean) => void;
   selectedTopic: any;
   setSelectedTopic(selectedTopic: any): void;
+  snackbar: {
+    open: boolean;
+    message: string;
+    severity: "success" | "error" | "warning" | "info";
+  };
+  setSnackbar: React.Dispatch<
+    React.SetStateAction<{
+      open: boolean;
+      message: string;
+      severity: "success" | "error" | "warning" | "info";
+    }>
+  >;
 }
 
 const TopicItem = styled(Box)(({ theme }) => ({
@@ -110,6 +124,8 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
   setEditMode,
   selectedTopic,
   setSelectedTopic,
+  snackbar,
+  setSnackbar,
 }) => {
   const theme = useTheme();
   const [deleteTopicId, setDeleteTopicId] = useState<string>("");
@@ -133,6 +149,10 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
     title: "",
   });
 
+  const [openUploadDialog, setOpenUploadDialog] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const [openTopicDialog, setOpenTopicDialog] = useState(false);
 
   const [isAddTopic, setAddTopic] = useState(false);
@@ -145,6 +165,22 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
 
   const [addingLecture, setAddingLecture] = useState<boolean>(false);
   const [hoveredTopicId, setHoveredTopicId] = useState<string | null>(null);
+
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const fileSchema = yup
+    .mixed()
+    .test(
+      "fileType",
+      "Not a valid format. Please upload PDF file only.",
+      (value) => {
+        if (!value) return true;
+        if (value instanceof File) {
+          return value.type === "application/pdf";
+        }
+        return false;
+      }
+    );
 
   const handleDelete = async () => {
     setLoading(true);
@@ -161,7 +197,7 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
 
     try {
       const response = await axios.post(
-        `http://localhost:8000/${endpoint}`,
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/${endpoint}`,
         send_data,
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
@@ -173,6 +209,14 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
       }
     } catch (error) {
     } finally {
+      setSnackbar({
+        open: true,
+        message:
+          deleteConfirmation.type === "topic"
+            ? "Topic deleted successfully"
+            : "Lesson deleted successfully",
+        severity: "success",
+      });
       handleCloseDeleteConfirmation();
     }
   };
@@ -210,7 +254,7 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
       send_data.append("title", newLectureTitle.trim());
 
       const response = await axios.post(
-        "http://localhost:8000/addLecture/",
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/addLecture/`,
         send_data,
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
@@ -222,6 +266,11 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
       console.error("Error adding lecture:", error);
     } finally {
       setLoading(false);
+      setSnackbar({
+        open: true,
+        message: "Lesson added successfully!",
+        severity: "success",
+      });
     }
   };
 
@@ -266,7 +315,7 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
     try {
       setAddingTopicLoading(true);
       const response = await axios.post(
-        "http://localhost:8000/addTopic/",
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/addTopic/`,
         send_data,
         {
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -282,6 +331,11 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
       console.error("Error adding topic:", error);
     } finally {
       setAddingTopicLoading(false);
+      setSnackbar({
+        open: true,
+        message: "Topic added successfully!",
+        severity: "success",
+      });
     }
   };
 
@@ -294,91 +348,179 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
         flexDirection: "column",
       }}
     >
+      {editMode && (
+        <Box
+          sx={{
+            top: 0,
+            backgroundColor: "background.paper",
+            py: 1,
+            px: 1,
+            display: "flex",
+            justifyContent: "center",
+            zIndex: 1,
+            borderBottom: `1px solid ${theme.palette.divider}`,
+            mb: 1,
+            gap: 1,
+          }}
+        >
+          <Chip
+            label="Add New Lesson"
+            onClick={() => setAddingLecture(true)}
+            disabled={addingLecture}
+            clickable
+            color="primary"
+            sx={{
+              borderTopLeftRadius: 24,
+              borderBottomLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomRightRadius: 24,
+
+              "&:hover": {
+                boxShadow: theme.shadows[2],
+              },
+            }}
+          />
+          <Chip
+            label="Upload File"
+            onClick={() => {
+              setOpenUploadDialog(true);
+            }}
+            clickable
+            color="secondary"
+            sx={{
+              borderTopLeftRadius: 24,
+              borderBottomLeftRadius: 24,
+              borderTopRightRadius: 24,
+              borderBottomRightRadius: 24,
+              "&:hover": {
+                boxShadow: theme.shadows[2],
+              },
+            }}
+          />
+        </Box>
+      )}
+
+      {editMode && addingLecture && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            pl: 2,
+            pr: 2,
+            mb: 2,
+            gap: 1,
+          }}
+        >
+          <TextField
+            size="small"
+            variant="outlined"
+            placeholder="Enter lecture title"
+            value={newLectureTitle}
+            onChange={(e) => setNewLectureTitle(e.target.value)}
+            sx={{ flexGrow: 1 }}
+            autoFocus
+            fullWidth
+          />
+          <Tooltip title="Add lecture">
+            <IconButton
+              onClick={handleAddLecture}
+              color="primary"
+              disabled={!newLectureTitle.trim() || loading}
+              size="small"
+              sx={{
+                backgroundColor: theme.palette.primary.main,
+                color: theme.palette.primary.contrastText,
+                "&:hover": {
+                  backgroundColor: theme.palette.primary.dark,
+                },
+              }}
+            >
+              {loading ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                <CheckIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Cancel">
+            <IconButton
+              onClick={() => {
+                setAddingLecture(false);
+                setNewLectureTitle("");
+              }}
+              size="small"
+              disabled={loading}
+              sx={{
+                backgroundColor: theme.palette.error.light,
+                color: theme.palette.error.contrastText,
+                "&:hover": {
+                  backgroundColor: theme.palette.error.main,
+                },
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
       <SimpleTreeView
         expandedItems={safeExpandedItems}
         onExpandedItemsChange={onExpandedItemsChange}
       >
-        {editMode && addingLecture && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              pl: 2,
-              mb: 1,
-            }}
-          >
-            <TextField
-              size="small"
-              variant="outlined"
-              placeholder="New lecture title"
-              value={newLectureTitle}
-              onChange={(e) => setNewLectureTitle(e.target.value)}
-              sx={{ flexGrow: 1, mr: 1 }}
-            />
-            <Tooltip title="Add lecture">
-              <IconButton
-                onClick={handleAddLecture}
-                color="primary"
-                disabled={!newLectureTitle.trim()}
-                size="small"
-              >
-                <CheckIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Cancel">
-              <IconButton
-                onClick={() => {
-                  setAddingLecture(false);
-                  setNewLectureTitle("");
-                }}
-                size="small"
-              >
-                <CloseIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
-
-        {lectures.map((lecture) => (
-          <CustomTreeItem
-            key={`lecture-${lecture._id}`}
-            itemId={lecture._id}
-            label={lecture.title}
-          >
-            {topics
-              .filter((topic) => topic.lecture_id === lecture._id)
-              .map((topic) => (
-                <TopicItem
-                  key={`topic-${topic._id}`}
-                  onMouseEnter={() => setHoveredTopicId(topic._id)}
+        {lectures.map((lecture) => {
+          const lectureTopics = topics.filter(
+            (topic) => topic.lecture_id === lecture._id
+          );
+          const isHovered = hoveredTopicId === `lecture-${lecture._id}`;
+          return (
+            <CustomTreeItem
+              key={`lecture-${lecture._id}`}
+              itemId={lecture._id}
+              label={
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    width: "100%",
+                    justifyContent: "space-between",
+                  }}
+                  onMouseEnter={() =>
+                    setHoveredTopicId(`lecture-${lecture._id}`)
+                  }
                   onMouseLeave={() => setHoveredTopicId(null)}
                 >
-                  <TopicContent>
-                    <CustomTreeItem
-                      itemId={topic._id}
-                      label={topic.title}
-                      onClick={() => handleSelectTopicEvent(topic._id)}
-                    />
-                  </TopicContent>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      flexGrow: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      pr: 1,
+                    }}
+                  >
+                    {lecture.title}
+                  </Typography>
                   {editMode && (
                     <DeleteButtonWrapper
+                      className="delete-lesson-btn"
                       sx={{
-                        opacity: hoveredTopicId === topic._id ? 1 : 0,
-                        transform:
-                          hoveredTopicId === topic._id
-                            ? "translateX(0)"
-                            : "translateX(10px)",
+                        opacity: isHovered ? 1 : 0,
+                        transform: isHovered
+                          ? "translateX(0)"
+                          : "translateX(-10px)",
+                        mr: 1,
                       }}
                     >
-                      <Tooltip title="Delete topic">
+                      <Tooltip title="Delete lesson">
                         <IconButton
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteConfirmation(
-                              "topic",
-                              topic._id,
-                              topic.title
+                              "lecture",
+                              lecture._id,
+                              lecture.title
                             );
                           }}
                           color="error"
@@ -388,134 +530,92 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
                       </Tooltip>
                     </DeleteButtonWrapper>
                   )}
-                </TopicItem>
-              ))}
-
-            {editMode && (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  pl: 3,
-                  pr: 1,
-                  gap: 1,
-                  mt: 1,
-                  mb: 1,
-                }}
-              >
-                <Chip
-                  icon={<AddIcon fontSize="small" />}
-                  label="Add Topic"
-                  onClick={() => {
-                    setSelectedLectureId(lecture._id);
-                    setOpenTopicDialog(true);
-                  }}
-                  size="small"
-                  variant="outlined"
-                  sx={{ cursor: "pointer" }}
-                />
-
-                <Chip
-                  icon={<DeleteIcon fontSize="small" />}
-                  label="Delete Lesson"
-                  onClick={() =>
-                    handleDeleteConfirmation(
-                      "lecture",
-                      lecture._id,
-                      lecture.title
-                    )
-                  }
-                  color="error"
-                  size="small"
-                  variant="outlined"
-                  sx={{ cursor: "pointer" }}
-                />
-              </Box>
-            )}
-          </CustomTreeItem>
-        ))}
-
-        {editMode && (
-          <>
-            {addingLecture ? (
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  pl: 2,
-                  pr: 2,
-                  mb: 1,
-                }}
-              >
-                <TextField
-                  size="small"
-                  variant="outlined"
-                  placeholder="New lecture title"
-                  value={newLectureTitle}
-                  onChange={(e) => setNewLectureTitle(e.target.value)}
-                  sx={{ flexGrow: 1, mr: 1 }}
-                  autoFocus
-                />
-                <Tooltip title="Add lecture">
-                  <IconButton
-                    onClick={handleAddLecture}
-                    color="primary"
-                    disabled={!newLectureTitle.trim() || loading}
+                  <Chip
+                    label={lectureTopics.length}
                     size="small"
+                    sx={{
+                      fontSize: "0.65rem",
+                      height: "20px",
+                      flexShrink: 0,
+                    }}
+                  />
+                </Box>
+              }
+            >
+              {topics
+                .filter((topic) => topic.lecture_id === lecture._id)
+                .map((topic) => (
+                  <TopicItem
+                    key={`topic-${topic._id}`}
+                    onMouseEnter={() => setHoveredTopicId(topic._id)}
+                    onMouseLeave={() => setHoveredTopicId(null)}
                   >
-                    {loading ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : (
-                      <CheckIcon />
+                    <TopicContent>
+                      <CustomTreeItem
+                        itemId={topic._id}
+                        label={topic.title}
+                        onClick={() => handleSelectTopicEvent(topic._id)}
+                      />
+                    </TopicContent>
+                    {editMode && (
+                      <DeleteButtonWrapper
+                        sx={{
+                          opacity: hoveredTopicId === topic._id ? 1 : 0,
+                          transform:
+                            hoveredTopicId === topic._id
+                              ? "translateX(0)"
+                              : "translateX(10px)",
+                        }}
+                      >
+                        <Tooltip title="Delete topic">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteConfirmation(
+                                "topic",
+                                topic._id,
+                                topic.title
+                              );
+                            }}
+                            color="error"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </DeleteButtonWrapper>
                     )}
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Cancel">
-                  <IconButton
+                  </TopicItem>
+                ))}
+
+              {editMode && (
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "center",
+                    pl: 3,
+                    pr: 1,
+                    gap: 1,
+                    mt: 1,
+                    mb: 1,
+                  }}
+                >
+                  <Chip
+                    icon={<AddIcon fontSize="small" />}
+                    label="Add Topic"
                     onClick={() => {
-                      setAddingLecture(false);
-                      setNewLectureTitle("");
+                      setSelectedLectureId(lecture._id);
+                      setOpenTopicDialog(true);
                     }}
                     size="small"
-                    disabled={loading}
-                  >
-                    <CloseIcon />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  position: "sticky",
-                  backgroundColor: "background.paper",
-                  py: 1,
-                  px: 1,
-                  display: "flex",
-                  justifyContent: "center",
-                  zIndex: 1,
-                  mt: "auto",
-                  gap: 1,
-                  overflowX: "hidden",
-                }}
-              >
-                <Button
-                  variant="contained"
-                  size="small"
-                  sx={{
-                    minWidth: 250,
-                    textTransform: "none",
-                    fontWeight: "bold",
-                    borderTopRightRadius: 0,
-                    borderBottomRightRadius: 0,
-                  }}
-                  onClick={() => setAddingLecture(true)}
-                >
-                  Add Lecture
-                </Button>
-              </Box>
-            )}
-          </>
-        )}
+                    variant="outlined"
+                    sx={{ cursor: "pointer" }}
+                  />
+                </Box>
+              )}
+            </CustomTreeItem>
+          );
+        })}
       </SimpleTreeView>
 
       <Dialog
@@ -614,6 +714,14 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
           <Button
             disabled={addingTopicLoading}
             onClick={() => setOpenTopicDialog(false)}
+            sx={{
+              borderTopRightRadius: 20,
+              borderBottomRightRadius: 20,
+              borderTopLeftRadius: 20,
+              borderBottomLeftRadius: 20,
+              minWidth: 100,
+              textTransform: "capitalize",
+            }}
           >
             Cancel
           </Button>
@@ -630,11 +738,232 @@ const LectureEditor: React.FC<LectureEditorProps> = ({
                 ? !addQATime
                 : false
             }
+            sx={{
+              borderTopRightRadius: 20,
+              borderBottomRightRadius: 20,
+              borderTopLeftRadius: 20,
+              borderBottomLeftRadius: 20,
+              minWidth: 100,
+              textTransform: "capitalize",
+            }}
           >
             {addingTopicLoading ? (
               <CircularProgress size={20} color="inherit" />
             ) : (
               "Add Topic"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openUploadDialog}
+        onClose={() => {
+          setOpenUploadDialog(false);
+          setUploadFile(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Upload PDF</DialogTitle>
+        <DialogContent>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 2,
+              pt: 1,
+              minHeight: 180,
+            }}
+          >
+            <Box
+              sx={{
+                width: "100%",
+                border: "2px dashed",
+                borderColor: theme.palette.divider,
+                borderRadius: 2,
+                p: 3,
+                textAlign: "center",
+                bgcolor: theme.palette.action.hover,
+                cursor: "pointer",
+                transition: "border-color 0.2s",
+                "&:hover": {
+                  borderColor: theme.palette.primary.main,
+                },
+              }}
+              component="label"
+            >
+              <input
+                type="file"
+                disabled={uploading}
+                accept="image/*,application/pdf"
+                hidden
+                onChange={async (e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const file = e.target.files[0];
+                    try {
+                      await fileSchema.validate(file);
+                      setUploadFile(file);
+                      setUploadError(null);
+                    } catch (err: any) {
+                      setUploadFile(null);
+                      setUploadError(err.message);
+                    }
+                  }
+                }}
+              />
+              {!uploadFile ? (
+                <>
+                  <UploadFileIcon
+                    sx={{ fontSize: 40, color: "text.secondary", mb: 1 }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Drag & drop or click to select an image or PDF
+                  </Typography>
+                </>
+              ) : (
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 1,
+                  }}
+                >
+                  {uploadFile.type.startsWith("image/") ? (
+                    <Box
+                      component="img"
+                      src={URL.createObjectURL(uploadFile)}
+                      alt={uploadFile.name}
+                      sx={{
+                        width: 64,
+                        height: 64,
+                        objectFit: "cover",
+                        borderRadius: 1,
+                        mb: 1,
+                        boxShadow: 1,
+                      }}
+                    />
+                  ) : (
+                    <UploadFileIcon
+                      sx={{ fontSize: 48, color: "primary.main", mb: 1 }}
+                    />
+                  )}
+                  <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
+                    {uploadFile.name}
+                  </Typography>
+                  <Button
+                    size="small"
+                    color="error"
+                    disabled={uploading}
+                    onClick={() => setUploadFile(null)}
+                    sx={{
+                      borderTopRightRadius: 20,
+                      borderBottomRightRadius: 20,
+                      borderTopLeftRadius: 20,
+                      borderBottomLeftRadius: 20,
+                      minWidth: 100,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </Box>
+              )}
+              {uploadError && (
+                <Typography color="error" sx={{ mt: 1 }}>
+                  {uploadError}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            mt: 2,
+          }}
+        >
+          <Button
+            onClick={() => {
+              setOpenUploadDialog(false);
+              setUploadFile(null);
+              setUploadError(null);
+            }}
+            sx={{
+              borderTopRightRadius: 20,
+              borderBottomRightRadius: 20,
+              borderTopLeftRadius: 20,
+              borderBottomLeftRadius: 20,
+              minWidth: 100,
+              textTransform: "capitalize",
+            }}
+            disabled={uploading}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            sx={{
+              borderTopRightRadius: 20,
+              borderBottomRightRadius: 20,
+              borderTopLeftRadius: 20,
+              borderBottomLeftRadius: 20,
+              minWidth: 100,
+              textTransform: "capitalize",
+            }}
+            disabled={!uploadFile || uploading}
+            onClick={async () => {
+              if (!uploadFile) return;
+              setUploading(true);
+              try {
+                const formData = new FormData();
+                formData.append("file", uploadFile);
+
+                const uploadRes = await axios.post(
+                  `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/file/`,
+                  formData,
+                  { headers: { "Content-Type": "multipart/form-data" } }
+                );
+
+                const fileName = uploadRes?.data?.file_name;
+                if (fileName) {
+                  const vectorFormData = new FormData();
+                  vectorFormData.append("file_name", fileName);
+
+                  await axios.post(
+                    `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/create-vector-db/v1/`,
+                    vectorFormData,
+                    { headers: { "Content-Type": "multipart/form-data" } }
+                  );
+                }
+
+                setOpenUploadDialog(false);
+                setUploadFile(null);
+
+                setSnackbar({
+                  open: true,
+                  message: "File uploaded successfully!",
+                  severity: "success",
+                });
+              } catch (err) {
+                setSnackbar({
+                  open: true,
+                  message: "Upload failed!",
+                  severity: "error",
+                });
+              } finally {
+                setUploading(false);
+              }
+            }}
+          >
+            {uploading ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              "Upload"
             )}
           </Button>
         </DialogActions>

@@ -38,8 +38,7 @@ interface SettingsPanelProps {
   setCurrentAudio: (audio: any) => void;
   curLectureId: string | null;
   currentAudio: any;
-  seconds: number;
-  minutes: number;
+
   isStart: boolean;
   ws: WebSocket | null;
   curTopicId: string | null;
@@ -53,7 +52,6 @@ interface SettingsPanelProps {
   onSTTMethodChange: (method: string) => void;
   languageToSTTMap: Record<string, string>;
   STTToLanguageMap: Record<string, string>;
-  // setSeconds: (seconds: number) => void;
 }
 
 interface LanguageOption {
@@ -80,8 +78,6 @@ const SettingsPanel = ({
   setCurrentAudio,
   curLectureId,
   currentAudio,
-  seconds,
-  minutes,
   isStart,
   ws,
   curTopicId,
@@ -102,13 +98,13 @@ const SettingsPanel = ({
     setSaveConversation(event.target.checked);
     if (event.target.checked) {
       axios.post(
-        `http://localhost:8000/saveConv/${connectrobot}`,
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/saveConv/${connectrobot}`,
         new URLSearchParams({ saveConv: "save" }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
     } else {
       axios.post(
-        `http://localhost:8000/saveConv/${connectrobot}`,
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/saveConv/${connectrobot}`,
         new URLSearchParams({ saveConv: "unsave" }),
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
       );
@@ -132,36 +128,11 @@ const SettingsPanel = ({
     onLanguageChange(STTToLanguageMap[method]);
   };
 
-  const TimerDisplay = () => (
-    <Stack
-      direction="row"
-      spacing={1}
-      alignItems="center"
-      sx={{
-        backgroundColor: orange[50],
-        borderRadius: 4,
-        padding: "6px 12px",
-        boxShadow: 1,
-        position: "absolute",
-        right: 16,
-        top: 16,
-        zIndex: 1201,
-      }}
-    >
-      <AccessTimeIcon sx={{ color: orange[800], fontSize: "1.2rem" }} />
-      <Typography
-        variant="subtitle1"
-        sx={{
-          fontFamily: "'Roboto Mono', monospace",
-          fontWeight: "bold",
-          color: orange[900],
-          fontSize: "0.9rem",
-        }}
-      >
-        {formatTime(minutes, seconds)}
-      </Typography>
-    </Stack>
-  );
+  const controlsDisabled =
+    !isLastMessage ||
+    isStart ||
+    isLoading ||
+    (currentAudio && !currentAudio.paused);
 
   const languages: LanguageOption[] = [
     { value: "English", label: "English" },
@@ -180,12 +151,10 @@ const SettingsPanel = ({
       <Box
         sx={{
           width: "100%",
-          height: "10px",
-          flex: 1,
           display: "flex",
           flexDirection: "column",
           position: "relative",
-          // backgroundColor: "red",
+          flexShrink: 0,
         }}
       >
         {doc.doc ? null : (
@@ -235,7 +204,7 @@ const SettingsPanel = ({
                       key={langOption.value}
                       label={langOption.label}
                       onClick={() => handleLanguageChange(langOption.value)}
-                      disabled={!isLastMessage || isStart || isLoading}
+                      disabled={controlsDisabled}
                       icon={<LanguageIcon fontSize="small" />}
                       color={
                         language === langOption.value ? "primary" : "default"
@@ -288,7 +257,7 @@ const SettingsPanel = ({
                       textTransform: "capitalize",
                       "& .MuiChip-label": { fontSize: "0.75rem" },
                     }}
-                    disabled={!isLastMessage || isStart || isLoading}
+                    disabled={controlsDisabled}
                   />
                 ))}
               </Stack>
@@ -296,11 +265,13 @@ const SettingsPanel = ({
           </Box>
         )}
       </Box>
+
       <Paper
         elevation={0}
         sx={{
           width: "100%",
           flex: 1,
+          minHeight: 0,
           borderRadius: 0,
           boxShadow: "none",
           position: "relative",
@@ -321,8 +292,6 @@ const SettingsPanel = ({
           setCurrentAudio={setCurrentAudio}
           curLectureId={curLectureId}
           currentAudio={currentAudio}
-          seconds={seconds}
-          minutes={minutes}
           isStart={isStart}
           ws={ws}
           curTopicId={curTopicId}

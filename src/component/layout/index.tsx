@@ -152,8 +152,11 @@ interface Topic {
 }
 
 import type { Message } from "../speechTotext";
+import SnackbarAlert from "../snackbar";
+import { parseVersionAndDate } from "@/helper/parseVersionAndDate";
 
 interface WebSocketData {
+  image_path: null;
   questionResponse?: string;
   text?: string;
   type?: string;
@@ -182,6 +185,10 @@ export default function Layout({ children }: LayoutProps) {
     state: { doc },
   } = UseContext();
 
+  const { version, date } = parseVersionAndDate(
+    process.env.NEXT_PUBLIC_VERSION
+  );
+
   const [editMode, setEditMode] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [mounted, setMounted] = useState<boolean>(false);
@@ -207,6 +214,12 @@ export default function Layout({ children }: LayoutProps) {
   const [sttMethod, setSTTmethod] = useState<string>(
     languageToSTTMap[language]
   );
+
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success" as "success" | "error" | "warning" | "info",
+  });
 
   // Timer state
   const [seconds, setSeconds] = useState<number>(0);
@@ -273,7 +286,6 @@ export default function Layout({ children }: LayoutProps) {
 
   const setupRobot = (e: React.ChangeEvent<HTMLInputElement>) => {
     setConnectrobot(e.target.value);
-    console.log("connectrobot:", connectrobot);
   };
 
   const handleStart = useCallback(
@@ -315,13 +327,13 @@ export default function Layout({ children }: LayoutProps) {
             .then((res) => {
               setIsStart(true);
               const websocket = new WebSocket(
-                `ws://localhost:8000/ws/${lectureId}/${connectrobot}`
+                `${process.env.NEXT_PUBLIC_V2_SERVER_URL_WS}/ws/${lectureId}/${connectrobot}`
               );
               websocket.onopen = () => {
                 console.log("WebSocket connection opened");
               };
               websocket.onmessage = (event) => {
-                console.log("Raw message from server:", event.data);
+                // console.log("Raw message from server:", event.data);
                 const data: WebSocketData = JSON.parse(event.data);
                 if (data.questionResponse) {
                   setMessages((prev) => [
@@ -332,6 +344,7 @@ export default function Layout({ children }: LayoutProps) {
                       sender: "You",
                       timestamp: new Date().toISOString(),
                       isOwn: true,
+                      image_path: null,
                     },
                   ]);
                 }
@@ -366,6 +379,9 @@ export default function Layout({ children }: LayoutProps) {
                         type: "model",
                         isOwn: false,
                         answer: true,
+                        image_path: data.image_path ?? null,
+                        language: language,
+                        length: data.text ? data.text.length : 0,
                       },
                     ]);
                     if (data.audio) {
@@ -392,6 +408,7 @@ export default function Layout({ children }: LayoutProps) {
                         audio: data.audio,
                         type: "static",
                         isOwn: false,
+                        image_path: null,
                       },
                     ]);
                     if (data.audio) {
@@ -428,7 +445,7 @@ export default function Layout({ children }: LayoutProps) {
           console.error("Error changing language:", err);
         });
     },
-    [language]
+    [language, connectrobot]
   );
 
   const handleLanguageChange = async (lang: string) => {
@@ -482,7 +499,7 @@ export default function Layout({ children }: LayoutProps) {
   useEffect(() => {
     setLessonLoading(true);
     axios
-      .get("http://localhost:8000/lectures/", {
+      .get(`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/lectures/`, {
         headers: { "Content-Type": "application/json" },
       })
       .then(function (res) {
@@ -494,7 +511,7 @@ export default function Layout({ children }: LayoutProps) {
         setLessonLoading(false);
       });
     axios
-      .get("http://localhost:8000/topics/", {
+      .get(`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/topics/`, {
         headers: { "Content-Type": "application/json" },
       })
       .then(function (res) {
@@ -506,12 +523,13 @@ export default function Layout({ children }: LayoutProps) {
   }, []);
 
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  useEffect(() => {
-    setExpandedItems([
-      ...lectures.map((lecture) => `${lecture._id}`),
-      ...topics.map((topic) => `${topic._id}`),
-    ]);
-  }, [lectures, topics]);
+
+  // useEffect(() => {
+  //   setExpandedItems([
+  //     ...lectures.map((lecture) => `${lecture._id}`),
+  //     ...topics.map((topic) => `${topic._id}`),
+  //   ]);
+  // }, [lectures, topics]);
 
   useEffect(() => {
     if (doc) {
@@ -530,6 +548,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const handleStartWithLoading = (lectureId: string, topicId: string) => {
     setIsLoading(true);
+    if (isMobile) setMobileOpen(false);
     handleStart(lectureId, topicId);
   };
 
@@ -589,6 +608,31 @@ export default function Layout({ children }: LayoutProps) {
             variant="standard"
             value={connectrobot}
             onChange={setupRobot}
+            sx={{ width: 250 }}
+            InputProps={{
+              sx: {
+                fontSize: "0.95rem",
+                fontWeight: 500,
+                fontFamily: "inherit",
+                color: "text.primary",
+                letterSpacing: "0.01em",
+              },
+              inputProps: {
+                style: {
+                  fontSize: "0.8rem",
+                  letterSpacing: "0.03em",
+                },
+              },
+            }}
+            InputLabelProps={{
+              sx: {
+                fontSize: "0.95rem",
+                fontWeight: 500,
+                fontFamily: "inherit",
+                color: "text.secondary",
+                letterSpacing: "0.01em",
+              },
+            }}
           />
         </Box>
       )}
@@ -623,14 +667,14 @@ export default function Layout({ children }: LayoutProps) {
                 variant="h6"
                 sx={{
                   fontWeight: 700,
-                  background: "#0E68CE",
+                  background: "#3d403e",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   display: "inline-block",
-                  mr: 1,
+                  
                 }}
               >
-                Lessons Editor
+                Lesson Editor
               </Typography>
             </Fade>
           ) : (
@@ -639,36 +683,38 @@ export default function Layout({ children }: LayoutProps) {
                 variant="h6"
                 sx={{
                   fontWeight: 700,
-                  background: "#0E68CE",
+                  background: "#3d403e",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   display: "inline-block",
                   mr: 1,
                 }}
               >
-                Lessons Player
+                Lessons
               </Typography>
             </Fade>
           )}
 
-          <Tooltip title={editMode ? "Back to menu" : "Edit lessons"}>
-            <IconButton
-              disabled={isLoading}
-              onClick={toggleEditMode}
-              sx={{ fontSize: 30 }}
-            >
-              {editMode ? (
-                <Chip
-                  disabled={isLoading}
-                  label={"Lesson"}
-                  color={"primary"}
-                  variant={"filled"}
-                />
-              ) : (
-                <EditIcon sx={{ color: "#0E68CE" }} />
-              )}
-            </IconButton>
-          </Tooltip>
+          <IconButton disabled={isLoading} onClick={toggleEditMode}>
+            {editMode ? (
+              <Chip
+                disabled={isLoading}
+                label={"Lessons"}
+                color={"primary"}
+                variant={"filled"}
+                icon={<EastIcon />}
+                sx={{
+                  borderTopLeftRadius: 24,
+                  borderBottomLeftRadius: 24,
+                  borderTopRightRadius: 24,
+                  borderBottomRightRadius: 24,
+                  fontSize: "0.7rem",
+                }}
+              />
+            ) : (
+              <EditIcon sx={{ color: "#0E68CE" }} />
+            )}
+          </IconButton>
         </Box>
         {editMode ? (
           <LectureEditor
@@ -708,6 +754,8 @@ export default function Layout({ children }: LayoutProps) {
             setEditMode={setEditMode}
             selectedTopic={selectedTopic}
             setSelectedTopic={setSelectedTopic}
+            snackbar={snackbar}
+            setSnackbar={setSnackbar}
           />
         ) : lessonLoading ? (
           <>
@@ -778,7 +826,39 @@ export default function Layout({ children }: LayoutProps) {
                   <CustomTreeItem
                     key={`lecture-${lecture._id}`}
                     itemId={lecture._id}
-                    label={lecture.title}
+                    label={
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          width: "100%",
+                          justifyContent: "space-between",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            flexGrow: 1,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            pr: 1,
+                          }}
+                        >
+                          {lecture.title}
+                        </Typography>
+                        <Chip
+                          label={lectureTopics.length}
+                          size="small"
+                          sx={{
+                            fontSize: "0.65rem",
+                            height: "20px",
+                            flexShrink: 0,
+                          }}
+                        />
+                      </Box>
+                    }
                   >
                     {lectureTopics.map((topic) => (
                       <CustomTreeItem
@@ -802,6 +882,12 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       <CssBaseline />
+      <SnackbarAlert
+        open={snackbar.open}
+        message={snackbar.message}
+        severity={snackbar.severity}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      />
       <Box sx={headerStyles(theme)} className={doc ? "hidden" : ""}>
         <AppBar
           position="fixed"
@@ -840,13 +926,44 @@ export default function Layout({ children }: LayoutProps) {
             </Typography>
 
             <Chip
-              label={process.env.NEXT_PUBLIC_VERSION}
+              label={
+                <Box
+                  component="span"
+                  sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                >
+                  <Box
+                    component="span"
+                    sx={{
+                      color: "text.secondary",
+                    }}
+                  >
+                    {version}
+                  </Box>
+                  {date && (
+                    <Box
+                      component="span"
+                      sx={{
+                        color: "text.secondary",
+                        fontSize: "0.90em",
+                        ml: 1,
+                        borderLeft: "1px solid",
+                        borderColor: "divider",
+                        pl: 1,
+                      }}
+                    >
+                      {date}
+                    </Box>
+                  )}
+                </Box>
+              }
               size="small"
               variant="outlined"
               sx={{
+                fontWeight: 200,
                 fontSize: "0.75rem",
                 bgcolor: "background.paper",
                 borderColor: "divider",
+                px: 1.5,
               }}
             />
             {/* <Avatar sx={{ bgcolor: theme.palette.primary.main }}>AD</Avatar> */}
@@ -913,6 +1030,8 @@ export default function Layout({ children }: LayoutProps) {
               setTopics={setTopics}
               setLectures={setLectures}
               editMode={editMode}
+              snackbar={snackbar}
+              setSnackbar={setSnackbar}
             />
           </Box>
         </Fade>
@@ -928,9 +1047,11 @@ export default function Layout({ children }: LayoutProps) {
             }),
             p: { xs: 1, sm: 1 },
             pt: 0,
-
             display: "flex",
             flexDirection: "column",
+            height: "calc(100vh - 64px)",
+            minHeight: 0,
+            overflow: "hidden",
           }}
         >
           <SettingsPanel
@@ -947,8 +1068,6 @@ export default function Layout({ children }: LayoutProps) {
             setCurrentAudio={setCurrentAudio}
             curLectureId={curLectureId}
             currentAudio={currentAudio}
-            seconds={seconds}
-            minutes={minutes}
             isStart={isStart}
             ws={ws}
             curTopicId={curTopicId}
