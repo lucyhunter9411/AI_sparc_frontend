@@ -20,13 +20,6 @@ export const getGreeting = () => {
       icon: <Brightness7Icon sx={{ color: "#FFA726", ml: 1, fontSize: 32 }} />,
     };
   }
-  if (hour >= 17 && hour < 21) {
-    return {
-      greeting: "Good evening!",
-      message: "How’s it going?",
-      icon: <NightsStayIcon sx={{ color: "#5C6BC0", ml: 1, fontSize: 32 }} />,
-    };
-  }
   return {
     greeting: "Hello!",
     message: "Burning the midnight oil?",

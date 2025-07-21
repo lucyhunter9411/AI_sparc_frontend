@@ -23,14 +23,6 @@ const SnackbarAlert: React.FC<SnackbarAlertProps> = ({
     onClose={onClose}
     anchorOrigin={{ vertical: "top", horizontal: "right" }}
   >
-    <Alert
-      onClose={onClose}
-      severity={severity}
-      sx={{ width: "100%" }}
-      variant="filled"
-    >
-      {message}
-    </Alert>
   </Snackbar>
 );
 

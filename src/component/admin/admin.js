@@ -750,39 +750,6 @@ const AdminPage = () => {
             </Typography>
             <Divider sx={{ marginBottom: 4, marginTop: 4 }}></Divider>
             <Grid container spacing={2}>
-              <Grid item xs={8}>
-                <Item>
-                  <div
-                    style={{ width: "100%", cursor: "pointer" }}
-                    onClick={() =>
-                      document.getElementById(`image-upload`).click()
-                    }
-                  >
-                    <img
-                      src={
-                        newImage
-                          ? "https://app-ragbackend-dev-wus-001.azurewebsites.net/static/image/" +
-                            newImage
-                          : "https://app-ragbackend-dev-wus-001.azurewebsites.net/static/camera.png"
-                      }
-                      onError={(e) => {
-                        e.currentTarget.src = `https://app-ragbackend-dev-wus-001.azurewebsites.net/static/camera.png`;
-                      }}
-                      style={{
-                        width: "100%",
-                      }}
-                    />
-                    <input
-                      // key={index}
-                      id={`image-upload`}
-                      type="file"
-                      onChange={(event) => handleImageSelect(event, "-")}
-                      accept="image/*"
-                      style={{ display: "none" }}
-                    />
-                  </div>
-                </Item>
-              </Grid>
               <Grid item xs={4}>
                 <Item>
                   <textarea

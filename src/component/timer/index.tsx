@@ -46,16 +46,6 @@ const TimerDisplay = React.memo(
         <Box
           component="span"
           sx={{
-            display: "inline-block",
-            minWidth: "1.2em",
-            textAlign: "center",
-          }}
-        >
-          {minutesPart}
-        </Box>
-        <Box
-          component="span"
-          sx={{
             animation: `${blink} 1s infinite`,
             px: 0.5,
           }}

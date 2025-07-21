@@ -225,29 +225,6 @@ const SettingsPanel = ({
                   rowGap={2}
                   sx={{ flex: 1 }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    {languages.map((langOption) => (
-                      <Chip
-                        key={langOption.value}
-                        label={langOption.label}
-                        onClick={() => handleLanguageChange(langOption.value)}
-                        disabled={controlsDisabled}
-                        icon={<LanguageIcon fontSize="small" />}
-                        color={
-                          language === langOption.value ? "primary" : "default"
-                        }
-                        variant={
-                          language === langOption.value ? "filled" : "outlined"
-                        }
-                        size="small"
-                        sx={{
-                          textTransform: "capitalize",
-                          "& .MuiChip-label": { fontSize: "0.85rem" },
-                        }}
-                      />
-                    ))}
-                  </Box>
-
                   <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography variant="body2">Show Text</Typography>
