@@ -893,7 +893,7 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
                 {currentMessage.image && (
                   <ImageContainer isfullscreen="true">
                     <img
-                      src={`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/image/${currentMessage.image}`}
+                      src={`${currentMessage.image}`}
                       style={{
                         maxWidth: "100%",
                         maxHeight: "70vh",
@@ -1084,7 +1084,7 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
                       {currentMessage.image && (
                         <ImageContainer isfullscreen={isFullScreen.toString()}>
                           <img
-                            src={`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/image/${currentMessage.image}`}
+                            src={`${currentMessage.image}`}
                             className="lecture-img"
                             style={{
                               maxWidth: "100%",

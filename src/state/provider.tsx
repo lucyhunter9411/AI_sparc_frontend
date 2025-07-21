@@ -1,12 +1,13 @@
 "use client";
 import React, { createContext, useReducer, useContext } from "react";
 import { reducer } from "./reducer";
-import { SET_DOC_UPDATE, SET_EDIT_MODE } from "./actions";
+import { SET_DOC_UPDATE, SET_EDIT_MODE, TOKEN } from "./actions";
 
 // Define your state type
 interface AppState {
   doc: boolean;
   editMode: boolean;
+  token: string;
 }
 
 // Define your context value type
@@ -14,6 +15,7 @@ interface ContextValue {
   state: AppState;
   setDoc: (payload: boolean) => void;
   setEditMode: (payload: boolean) => void;
+  setToken: (payload: string) => void;
 }
 
 // Create context with initial value typed
@@ -21,14 +23,17 @@ export const Context = createContext<ContextValue>({
   state: {
     doc: false,
     editMode: false,
+    token: "",
   },
   setDoc: () => {},
   setEditMode: () => {},
+  setToken: () => {},
 });
 
 const initialState: AppState = {
   doc: false,
   editMode: false,
+  token: "",
 };
 
 interface ProviderProps {
@@ -42,6 +47,7 @@ export function ProviderContext({ children }: ProviderProps) {
     dispatch({ type: SET_DOC_UPDATE, payload });
   const setEditMode = (payload: boolean) =>
     dispatch({ type: SET_EDIT_MODE, payload });
+  const setToken = (payload: string) => dispatch({ type: TOKEN, payload });
 
   return (
     <Context.Provider
@@ -49,6 +55,7 @@ export function ProviderContext({ children }: ProviderProps) {
         state,
         setDoc,
         setEditMode,
+        setToken,
       }}
     >
       {children}

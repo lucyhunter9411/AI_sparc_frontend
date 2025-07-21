@@ -219,7 +219,7 @@ stages:
             inputs:
               azureSubscription: 'Sparc-Azure'
               Action: 'Stop Azure App Service'
-              WebAppName: 'app-ragfrontend-prod-wus2-001'
+              WebAppName: 'app-ragfrontend-prod-inc-001'
 
           - task: AzureRmWebAppDeployment@5
             displayName: 'Deploy to Azure Web App - Stage'
@@ -227,7 +227,7 @@ stages:
               ConnectionType: 'AzureRM'
               azureSubscription: 'Sparc-Azure'
               appType: 'webAppLinux'
-              WebAppName: 'app-ragfrontend-prod-wus2-001' # Update this to your actual Stage Web App name
+              WebAppName: 'app-ragfrontend-prod-inc-001' # Update this to your actual Stage Web App name
               packageForLinux: '$(Pipeline.Workspace)/node-app/release.zip'
               RuntimeStack: 'NODE|22-lts'
               DeploymentTypeLinux: 'zipDeploy'
@@ -240,4 +240,4 @@ stages:
             inputs:
               azureSubscription: 'Sparc-Azure'
               Action: 'Start Azure App Service'
-              WebAppName: 'app-ragfrontend-prod-wus2-001'
+              WebAppName: 'app-ragfrontend-prod-inc-001'

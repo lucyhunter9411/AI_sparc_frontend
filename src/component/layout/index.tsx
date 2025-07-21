@@ -35,6 +35,10 @@ import {
   Theme,
   Fade,
   Skeleton,
+  ToggleButtonGroup,
+  ToggleButton,
+  MenuItem,
+  Menu,
 } from "@mui/material";
 import {
   Dashboard as DashboardIcon,
@@ -154,6 +158,10 @@ interface Topic {
 import type { Message } from "../speechTotext";
 import SnackbarAlert from "../snackbar";
 import { parseVersionAndDate } from "@/helper/parseVersionAndDate";
+import DevicesCardUI from "../teleVision";
+import { getMe } from "@/app/auth/auth";
+import { safeLocalStorage } from "@/app/utils/storage";
+import { useRouter } from "next/navigation";
 
 interface WebSocketData {
   image_path: null;
@@ -184,10 +192,17 @@ export default function Layout({ children }: LayoutProps) {
   const {
     state: { doc },
   } = UseContext();
+  const router = useRouter();
 
   const { version, date } = parseVersionAndDate(
     process.env.NEXT_PUBLIC_VERSION
   );
+
+  const [username, setUsername] = useState("");
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
+
+  const [mode, setMode] = useState<"sprac" | "admin">("sprac");
 
   const [editMode, setEditMode] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
@@ -221,6 +236,10 @@ export default function Layout({ children }: LayoutProps) {
     severity: "success" as "success" | "error" | "warning" | "info",
   });
 
+  const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+
   // Timer state
   const [seconds, setSeconds] = useState<number>(0);
   const [minutes, setMinutes] = useState<number>(0);
@@ -229,6 +248,31 @@ export default function Layout({ children }: LayoutProps) {
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  console.log(username, "username");
+
+  useEffect(() => {
+    const token = safeLocalStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const fetchUserData = async () => {
+      try {
+        const userResponse = await getMe(token);
+        setUsername(userResponse.username);
+      } catch (error: any) {
+        console.error("Failed to fetch user data:", error);
+        if (error?.response?.status === 401) {
+          safeLocalStorage.removeItem("token");
+          router.push("/login");
+        }
+      }
+    };
+
+    fetchUserData();
+  }, [router]);
 
   useEffect(() => {
     return () => {
@@ -267,6 +311,36 @@ export default function Layout({ children }: LayoutProps) {
   }, [messages]);
 
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setCurrentAudio(null);
+    }
+    if (ws) {
+      ws.close();
+      setWs(null);
+    }
+    router.push("/login");
+    setAnchorEl(null);
+    setIsStart(false);
+    setMessages([]);
+    setCurLectureId(null);
+    setSelectedTopic({});
+    setLanguage("English");
+    setLectures([]);
+    setTopics([]);
+    safeLocalStorage.removeItem("drawerOpen");
+  };
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
 
   // Function to generate a timestamp string
   const generateTimestamp = () => {
@@ -333,7 +407,6 @@ export default function Layout({ children }: LayoutProps) {
                 console.log("WebSocket connection opened");
               };
               websocket.onmessage = (event) => {
-                // console.log("Raw message from server:", event.data);
                 const data: WebSocketData = JSON.parse(event.data);
                 if (data.questionResponse) {
                   setMessages((prev) => [
@@ -482,9 +555,9 @@ export default function Layout({ children }: LayoutProps) {
   const [userOpen, setUserOpen] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("drawerOpen");
-      return saved ? saved === "true" : !isMobile;
+      return saved ? saved === "true" : false;
     }
-    return !isMobile;
+    return false;
   });
 
   const effectiveOpen = !doc && userOpen;
@@ -492,9 +565,6 @@ export default function Layout({ children }: LayoutProps) {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const [lectures, setLectures] = useState<Lecture[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
 
   useEffect(() => {
     setLessonLoading(true);
@@ -524,19 +594,9 @@ export default function Layout({ children }: LayoutProps) {
 
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
-  // useEffect(() => {
-  //   setExpandedItems([
-  //     ...lectures.map((lecture) => `${lecture._id}`),
-  //     ...topics.map((topic) => `${topic._id}`),
-  //   ]);
-  // }, [lectures, topics]);
-
   useEffect(() => {
     if (doc) {
       setUserOpen(false);
-    } else {
-      const saved = localStorage.getItem("drawerOpen");
-      if (saved) setUserOpen(saved === "true");
     }
   }, [doc]);
 
@@ -544,6 +604,7 @@ export default function Layout({ children }: LayoutProps) {
     const newOpen = !userOpen;
     setUserOpen(newOpen);
     localStorage.setItem("drawerOpen", String(newOpen));
+    setShowSettingsPanel(newOpen);
   };
 
   const handleStartWithLoading = (lectureId: string, topicId: string) => {
@@ -592,9 +653,6 @@ export default function Layout({ children }: LayoutProps) {
             color: "white",
           }}
         >
-          <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-            EduConnect
-          </Typography>
           <IconButton onClick={handleDrawerToggle} sx={{ color: "white" }}>
             {effectiveOpen ? <ChevronLeftIcon /> : <ChevronRightIcon />}
           </IconButton>
@@ -671,7 +729,6 @@ export default function Layout({ children }: LayoutProps) {
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   display: "inline-block",
-                  
                 }}
               >
                 Lesson Editor
@@ -760,7 +817,6 @@ export default function Layout({ children }: LayoutProps) {
         ) : lessonLoading ? (
           <>
             <Box sx={{ p: 2 }}>
-              {/* Lecture skeleton */}
               <Box sx={{ mb: 3 }}>
                 <Skeleton
                   variant="rounded"
@@ -768,7 +824,6 @@ export default function Layout({ children }: LayoutProps) {
                   height={40}
                   sx={{ mb: 1 }}
                 />
-                {/* Topics skeletons */}
                 <Box sx={{ pl: 3 }}>
                   <Skeleton
                     variant="rounded"
@@ -785,7 +840,6 @@ export default function Layout({ children }: LayoutProps) {
                   <Skeleton variant="rounded" width="70%" height={30} />
                 </Box>
               </Box>
-              {/* Second lecture skeleton */}
               <Box sx={{ mb: 3 }}>
                 <Skeleton
                   variant="rounded"
@@ -793,7 +847,6 @@ export default function Layout({ children }: LayoutProps) {
                   height={40}
                   sx={{ mb: 1 }}
                 />
-                {/* Topics skeletons */}
                 <Box sx={{ pl: 3 }}>
                   <Skeleton
                     variant="rounded"
@@ -900,7 +953,14 @@ export default function Layout({ children }: LayoutProps) {
             borderColor: "divider",
           }}
         >
-          <Toolbar>
+          <Toolbar
+            sx={{
+              minHeight: 40,
+              px: 1,
+              py: 0.5,
+              gap: 1,
+            }}
+          >
             <IconButton
               color="inherit"
               edge="start"
@@ -920,10 +980,46 @@ export default function Layout({ children }: LayoutProps) {
                 margin: "0 auto",
                 fontWeight: 600,
                 textTransform: "uppercase",
+                fontSize: "1.1rem",
               }}
             >
               SPARC
             </Typography>
+
+            <ToggleButtonGroup
+              value={mode}
+              exclusive
+              onChange={(_, newMode) => {
+                if (newMode) setMode(newMode);
+              }}
+              size="small"
+              sx={{
+                mr: 2,
+                borderRadius: 4,
+                overflow: "hidden",
+                boxShadow: 1,
+                "& .MuiToggleButton-root:first-of-type": {
+                  borderTopLeftRadius: 16,
+                  borderBottomLeftRadius: 16,
+                },
+                "& .MuiToggleButton-root:last-of-type": {
+                  borderTopRightRadius: 16,
+                  borderBottomRightRadius: 16,
+                },
+                "& .MuiToggleButton-root": {
+                  px: 2,
+                  py: 0.5,
+                  fontSize: "0.50rem",
+                },
+              }}
+            >
+              <ToggleButton value="sprac" disabled>
+                Sprac
+              </ToggleButton>
+              <ToggleButton value="admin" disabled>
+                Admin
+              </ToggleButton>
+            </ToggleButtonGroup>
 
             <Chip
               label={
@@ -931,12 +1027,7 @@ export default function Layout({ children }: LayoutProps) {
                   component="span"
                   sx={{ display: "flex", alignItems: "center", gap: 1 }}
                 >
-                  <Box
-                    component="span"
-                    sx={{
-                      color: "text.secondary",
-                    }}
-                  >
+                  <Box component="span" sx={{ color: "text.secondary" }}>
                     {version}
                   </Box>
                   {date && (
@@ -966,7 +1057,71 @@ export default function Layout({ children }: LayoutProps) {
                 px: 1.5,
               }}
             />
-            {/* <Avatar sx={{ bgcolor: theme.palette.primary.main }}>AD</Avatar> */}
+
+            <IconButton
+              onClick={handleMenuOpen}
+              size="small"
+              sx={{ ml: 2 }}
+              aria-controls={open ? "account-menu" : undefined}
+              aria-haspopup="true"
+              aria-expanded={open ? "true" : undefined}
+            >
+              <Avatar
+                sx={{
+                  width: 32,
+                  height: 32,
+                  bgcolor: theme.palette.secondary.main,
+                }}
+              >
+                {username ? (
+                  username.charAt(0).toUpperCase()
+                ) : (
+                  <PersonIcon fontSize="small" />
+                )}
+              </Avatar>
+            </IconButton>
+            <Menu
+              anchorEl={anchorEl}
+              id="account-menu"
+              open={open}
+              onClose={handleMenuClose}
+              onClick={handleMenuClose}
+              PaperProps={{
+                elevation: 0,
+                sx: {
+                  overflow: "visible",
+                  filter: "drop-shadow(0px 2px 8px rgba(0,0,0,0.32))",
+                  mt: 1.5,
+                  "& .MuiAvatar-root": {
+                    width: 32,
+                    height: 32,
+                    ml: -0.5,
+                    mr: 1,
+                  },
+                  "&:before": {
+                    content: '""',
+                    display: "block",
+                    position: "absolute",
+                    top: 0,
+                    right: 14,
+                    width: 10,
+                    height: 10,
+                    bgcolor: "background.paper",
+                    transform: "translateY(-50%) rotate(45deg)",
+                    zIndex: 0,
+                  },
+                },
+              }}
+              transformOrigin={{ horizontal: "right", vertical: "top" }}
+              anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+            >
+              <MenuItem onClick={handleLogout}>
+                <ListItemIcon>
+                  <ChevronLeftIcon fontSize="small" />
+                </ListItemIcon>
+                Logout
+              </MenuItem>
+            </Menu>
           </Toolbar>
 
           {isMobile && (
@@ -987,95 +1142,113 @@ export default function Layout({ children }: LayoutProps) {
           )}
         </AppBar>
       </Box>
-      {!isMobile && (
-        <Drawer
-          variant="persistent"
-          open={effectiveOpen}
-          sx={{
-            width: drawerWidth,
-            flexShrink: 0,
-            "& .MuiDrawer-paper": {
-              width: drawerWidth,
-              boxSizing: "border-box",
-            },
-          }}
-        >
-          {drawerContent}
-        </Drawer>
+      {mode === "sprac" && (
+        <>
+          {!isMobile && (
+            <Drawer
+              variant="persistent"
+              open={effectiveOpen}
+              sx={{
+                width: drawerWidth,
+                flexShrink: 0,
+                "& .MuiDrawer-paper": {
+                  width: drawerWidth,
+                  boxSizing: "border-box",
+                },
+              }}
+            >
+              {drawerContent}
+            </Drawer>
+          )}
+        </>
       )}
-      {editMode ? (
-        <Fade in={editMode}>
-          <Box
-            component="main"
-            sx={{
-              flexGrow: 1,
-              ml: !isMobile && effectiveOpen ? `${drawerWidth}px` : 0,
-              transition: theme.transitions.create(["margin", "padding-top"], {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.enteringScreen,
-              }),
-              p: { xs: 1, sm: 1 },
-              pt: 0,
-              display: "flex",
-              flexDirection: "column",
-              height: "calc(100vh - 64px)",
-              overflow: "auto",
-            }}
-          >
-            <ContentCreator
-              selectedTopic={selectedTopic}
-              setSelectedTopic={setSelectedTopic}
-              lectures={lectures}
-              topics={topics}
-              setTopics={setTopics}
-              setLectures={setLectures}
-              editMode={editMode}
-              snackbar={snackbar}
-              setSnackbar={setSnackbar}
-            />
-          </Box>
-        </Fade>
-      ) : (
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            ml: !isMobile && effectiveOpen ? `${drawerWidth}px` : 0,
-            transition: theme.transitions.create(["margin", "padding-top"], {
-              easing: theme.transitions.easing.sharp,
-              duration: theme.transitions.duration.enteringScreen,
-            }),
-            p: { xs: 1, sm: 1 },
-            pt: 0,
-            display: "flex",
-            flexDirection: "column",
-            height: "calc(100vh - 64px)",
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <SettingsPanel
-            languageToSTTMap={languageToSTTMap}
-            STTToLanguageMap={STTToLanguageMap}
-            language={language}
-            onLanguageChange={handleLanguageChange}
-            sttMethod={sttMethod}
-            onSTTMethodChange={handleSTTMethodChange}
-            setLanguage={setLanguage}
-            connectrobot={connectrobot}
-            messages={messages}
-            setMessages={setMessages}
-            setCurrentAudio={setCurrentAudio}
-            curLectureId={curLectureId}
-            currentAudio={currentAudio}
-            isStart={isStart}
-            ws={ws}
-            curTopicId={curTopicId}
-            disabledTyping={disabledTyping}
-            isLoading={isLoading}
-            setIsLoading={setIsLoading}
-          />
-        </Box>
+
+      {mode === "admin" && <DevicesCardUI connectrobot={connectrobot} />}
+
+      {mode === "sprac" && (
+        <>
+          {editMode ? (
+            <Fade in={editMode}>
+              <Box
+                component="main"
+                sx={{
+                  flexGrow: 1,
+                  ml: !isMobile && effectiveOpen ? `${drawerWidth}px` : 0,
+                  transition: theme.transitions.create(
+                    ["margin", "padding-top"],
+                    {
+                      easing: theme.transitions.easing.sharp,
+                      duration: theme.transitions.duration.enteringScreen,
+                    }
+                  ),
+                  p: { xs: 1, sm: 1 },
+                  pt: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "calc(100vh - 64px)",
+                  overflow: "auto",
+                }}
+              >
+                <ContentCreator
+                  selectedTopic={selectedTopic}
+                  setSelectedTopic={setSelectedTopic}
+                  lectures={lectures}
+                  topics={topics}
+                  setTopics={setTopics}
+                  setLectures={setLectures}
+                  editMode={editMode}
+                  snackbar={snackbar}
+                  setSnackbar={setSnackbar}
+                />
+              </Box>
+            </Fade>
+          ) : (
+            <Box
+              component="main"
+              sx={{
+                flexGrow: 1,
+                ml: !isMobile && effectiveOpen ? `${drawerWidth}px` : 0,
+                transition: theme.transitions.create(
+                  ["margin", "padding-top"],
+                  {
+                    easing: theme.transitions.easing.sharp,
+                    duration: theme.transitions.duration.enteringScreen,
+                  }
+                ),
+                p: { xs: 1, sm: 1 },
+                pt: 0,
+                display: "flex",
+                flexDirection: "column",
+                height: "calc(100vh - 64px)",
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
+              <SettingsPanel
+                languageToSTTMap={languageToSTTMap}
+                STTToLanguageMap={STTToLanguageMap}
+                language={language}
+                onLanguageChange={handleLanguageChange}
+                sttMethod={sttMethod}
+                onSTTMethodChange={handleSTTMethodChange}
+                setLanguage={setLanguage}
+                connectrobot={connectrobot}
+                messages={messages}
+                setMessages={setMessages}
+                setCurrentAudio={setCurrentAudio}
+                curLectureId={curLectureId}
+                currentAudio={currentAudio}
+                isStart={isStart}
+                ws={ws}
+                curTopicId={curTopicId}
+                disabledTyping={disabledTyping}
+                isLoading={isLoading}
+                setIsLoading={setIsLoading}
+                showTopControls={showSettingsPanel}
+              />
+            </Box>
+          )}
+        </>
       )}
     </Box>
   );

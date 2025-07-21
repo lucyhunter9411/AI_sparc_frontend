@@ -16,6 +16,7 @@ import {
   useTheme,
   IconButton,
   Slide,
+  Fade,
 } from "@mui/material";
 import {
   Language as LanguageIcon,
@@ -38,7 +39,7 @@ interface SettingsPanelProps {
   setCurrentAudio: (audio: any) => void;
   curLectureId: string | null;
   currentAudio: any;
-
+  showTopControls: boolean;
   isStart: boolean;
   ws: WebSocket | null;
   curTopicId: string | null;
@@ -84,6 +85,7 @@ const SettingsPanel = ({
   disabledTyping,
   isLoading,
   setIsLoading,
+  showTopControls,
 }: SettingsPanelProps) => {
   const [showText, setShowText] = useState<boolean>(false);
   const [isLastMessage, setIsLastMessage] = useState<boolean>(false);
@@ -91,6 +93,8 @@ const SettingsPanel = ({
   const { state: doc } = UseContext();
 
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const [showMobileControls, setShowMobileControls] = useState(false);
 
   const [saveConversation, setSaveConversation] = useState<boolean>(true);
 
@@ -148,123 +152,147 @@ const SettingsPanel = ({
 
   return (
     <>
-      <Box
-        sx={{
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-          position: "relative",
-          flexShrink: 0,
-        }}
+      {isMobile && (
+        <Box
+          sx={{
+            width: "100%",
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          <IconButton
+            color="primary"
+            onClick={() => setShowMobileControls((prev) => !prev)}
+            size="large"
+          >
+            <SettingsIcon />
+          </IconButton>
+        </Box>
+      )}
+
+      <Fade
+        in={showTopControls && (!isMobile || showMobileControls)}
+        timeout={400}
+        unmountOnExit
       >
-        {doc.doc ? null : (
-          <Box sx={{ position: "relative" }}>
-            <Paper
-              elevation={2}
-              sx={{
-                position: "relative",
-                p: 2,
-                borderRadius: 0,
-                width: "100%",
-                zIndex: 1200,
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent: "space-between",
-                rowGap: 2,
-                columnGap: 3,
-                overflowX: "auto",
-                "&::-webkit-scrollbar": { height: "6px" },
-                "&::-webkit-scrollbar-thumb": {
-                  backgroundColor: "rgba(0, 0, 0, 0.1)",
-                  borderRadius: "3px",
-                },
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                backgroundColor: theme.palette.background.paper,
-              }}
-            >
-              <Stack
-                direction="row"
-                spacing={2}
-                divider={
-                  <Divider
-                    orientation="vertical"
-                    flexItem
-                    sx={{ display: { xs: "none", sm: "block" } }}
-                  />
-                }
-                alignItems="center"
-                flexWrap="wrap"
-                rowGap={2}
-                sx={{ flex: 1 }}
+        <Box
+          sx={{
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            position: "relative",
+            flexShrink: 0,
+          }}
+        >
+          {doc.doc ? null : (
+            <Box sx={{ position: "relative" }}>
+              <Paper
+                elevation={2}
+                sx={{
+                  position: "relative",
+                  p: 2,
+                  borderRadius: 0,
+                  width: "100%",
+                  zIndex: 1200,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  rowGap: 2,
+                  columnGap: 3,
+                  overflowX: "auto",
+                  "&::-webkit-scrollbar": { height: "6px" },
+                  "&::-webkit-scrollbar-thumb": {
+                    backgroundColor: "rgba(0, 0, 0, 0.1)",
+                    borderRadius: "3px",
+                  },
+                  borderBottom: `1px solid ${theme.palette.divider}`,
+                  backgroundColor: theme.palette.background.paper,
+                }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  {languages.map((langOption) => (
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  divider={
+                    <Divider
+                      orientation="vertical"
+                      flexItem
+                      sx={{ display: { xs: "none", sm: "block" } }}
+                    />
+                  }
+                  alignItems="center"
+                  flexWrap="wrap"
+                  rowGap={2}
+                  sx={{ flex: 1 }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {languages.map((langOption) => (
+                      <Chip
+                        key={langOption.value}
+                        label={langOption.label}
+                        onClick={() => handleLanguageChange(langOption.value)}
+                        disabled={controlsDisabled}
+                        icon={<LanguageIcon fontSize="small" />}
+                        color={
+                          language === langOption.value ? "primary" : "default"
+                        }
+                        variant={
+                          language === langOption.value ? "filled" : "outlined"
+                        }
+                        size="small"
+                        sx={{
+                          textTransform: "capitalize",
+                          "& .MuiChip-label": { fontSize: "0.85rem" },
+                        }}
+                      />
+                    ))}
+                  </Box>
+
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="body2">Show Text</Typography>
+                      <Switch
+                        size="small"
+                        checked={showText}
+                        onChange={() => setShowText(!showText)}
+                        color="primary"
+                      />
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="body2">Save Conversation</Typography>
+                      <Switch
+                        size="small"
+                        checked={saveConversation}
+                        onChange={handleSaveConv}
+                        color="primary"
+                      />
+                    </Box>
+                  </Box>
+                </Stack>
+
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                  {sttMethods.map((item) => (
                     <Chip
-                      key={langOption.value}
-                      label={langOption.label}
-                      onClick={() => handleLanguageChange(langOption.value)}
-                      disabled={controlsDisabled}
-                      icon={<LanguageIcon fontSize="small" />}
-                      color={
-                        language === langOption.value ? "primary" : "default"
-                      }
-                      variant={
-                        language === langOption.value ? "filled" : "outlined"
-                      }
+                      key={item.value}
+                      label={item.label}
+                      onClick={() => handleSTTMethodChange(item.value)}
+                      icon={<MicIcon fontSize="small" />}
+                      color={sttMethod === item.value ? "primary" : "default"}
+                      variant={sttMethod === item.value ? "filled" : "outlined"}
                       size="small"
                       sx={{
                         textTransform: "capitalize",
-                        "& .MuiChip-label": { fontSize: "0.85rem" },
+                        "& .MuiChip-label": { fontSize: "0.75rem" },
                       }}
+                      disabled={controlsDisabled}
                     />
                   ))}
-                </Box>
-
-                <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography variant="body2">Show Text</Typography>
-                    <Switch
-                      size="small"
-                      checked={showText}
-                      onChange={() => setShowText(!showText)}
-                      color="primary"
-                    />
-                  </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography variant="body2">Save Conversation</Typography>
-                    <Switch
-                      size="small"
-                      checked={saveConversation}
-                      onChange={handleSaveConv}
-                      color="primary"
-                    />
-                  </Box>
-                </Box>
-              </Stack>
-
-              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                {sttMethods.map((item) => (
-                  <Chip
-                    key={item.value}
-                    label={item.label}
-                    onClick={() => handleSTTMethodChange(item.value)}
-                    icon={<MicIcon fontSize="small" />}
-                    color={sttMethod === item.value ? "primary" : "default"}
-                    variant={sttMethod === item.value ? "filled" : "outlined"}
-                    size="small"
-                    sx={{
-                      textTransform: "capitalize",
-                      "& .MuiChip-label": { fontSize: "0.75rem" },
-                    }}
-                    disabled={controlsDisabled}
-                  />
-                ))}
-              </Stack>
-            </Paper>
-          </Box>
-        )}
-      </Box>
+                </Stack>
+              </Paper>
+            </Box>
+          )}
+        </Box>
+      </Fade>
 
       <Paper
         elevation={0}

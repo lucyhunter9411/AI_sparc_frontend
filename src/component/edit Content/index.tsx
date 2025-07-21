@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Fade,
   Grid,
   Paper,
   Snackbar,
@@ -19,6 +20,7 @@ import {
   styled,
 } from "@mui/material";
 import { PlayArrow, Stop, Save, Add, School } from "@mui/icons-material";
+import { Dialog as MuiDialog, ImageList, ImageListItem } from "@mui/material";
 import axios from "axios";
 import { getGreeting } from "../common";
 
@@ -31,6 +33,7 @@ interface ContentItem {
 }
 
 interface TopicType {
+  lecture_id: any;
   title: any;
   _id: string;
   content?: ContentItem[];
@@ -203,6 +206,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
   const [modifiedFields, setModifiedFields] = useState<
     Record<number, ModifiedFields>
   >({});
+  const [selectedLecture, setSelectedLecture] = useState<any>(null);
 
   const [generatingIndex, setGeneratingIndex] = useState<number | null>(null);
 
@@ -214,6 +218,124 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
     add: false,
   });
 
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [gallerySelectIndex, setGallerySelectIndex] = useState<
+    number | string | null
+  >(null);
+
+  const [galleryImages, setGalleryImages] = useState<
+    { image_path: string; description: string }[]
+  >([]);
+  const [galleryLoading, setGalleryLoading] = useState(false);
+
+  useEffect(() => {
+    if (galleryOpen) {
+      setGalleryLoading(true);
+      axios
+        .get(`${process.env.NEXT_PUBLIC_V2_SERVER_URL}/faiss/images/`)
+        .then((res) => {
+          setGalleryImages(res.data.images || []);
+        })
+        .catch((err) => {
+          setGalleryImages([]);
+        })
+        .finally(() => setGalleryLoading(false));
+    }
+  }, [galleryOpen]);
+
+  useEffect(() => {
+    if (selectedTopic?.lecture_id && lectures?.length) {
+      const lecture = lectures.find(
+        (l: { _id: any }) => l._id === selectedTopic.lecture_id
+      );
+      setSelectedLecture(lecture);
+    }
+  }, [selectedTopic, lectures]);
+
+  const handleGallerySelect = async (
+    imgUrl: string,
+    index: number | string
+  ) => {
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/lessons/images/from-url/`,
+        { image_url: imgUrl },
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      const uploadedImageUrl = response.data.imageUrl;
+
+      if (index === "-") {
+        if (index === "-") {
+          setNewImage(uploadedImageUrl);
+          setGalleryOpen(false);
+          setTimeout(() => {
+            setSnackbar({
+              open: true,
+              message: "Image selected from gallery!",
+              severity: "success",
+            });
+          }, 100);
+        }
+      } else {
+        const updatedTopic = { ...selectedTopic };
+        const updatedContent = [...(updatedTopic.content || [])];
+        updatedContent[Number(index)] = {
+          ...updatedContent[Number(index)],
+          image: uploadedImageUrl,
+        };
+        updatedTopic.content = updatedContent;
+
+        setSelectedTopic(updatedTopic as TopicType);
+        setGalleryOpen(false);
+        setGallerySelectIndex(null);
+        setModifiedFields((prev) => ({
+          ...prev,
+          [index]: {
+            ...(prev[Number(index)] || {}),
+            image: true,
+          },
+        }));
+
+        await axios.post(
+          `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/imageUpdate/`,
+          updatedTopic,
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        setTopics((prevTopics: any[]) => {
+          if (Array.isArray(prevTopics)) {
+            return prevTopics.map((topic) =>
+              topic._id === updatedTopic._id ? updatedTopic : topic
+            );
+          } else {
+            console.error("prevTopics is not an array:", prevTopics);
+            return [];
+          }
+        });
+        setSnackbar({
+          open: true,
+          message: "Image updated successfully!",
+          severity: "success",
+        });
+      }
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: "Failed to upload gallery image!",
+        severity: "error",
+      });
+      console.error("Error uploading gallery image:", error);
+    }
+  };
+
   const handleSnackbarClose = () => {
     setSnackbar((prev) => ({ ...prev, open: false }));
   };
@@ -222,18 +344,20 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
     setOpenModal(true);
     setAddContent(true);
     setNewContent("");
+    setNewImage("");
     setSelectedImage(null);
   };
 
   const handleCloseModal = () => setAddContent(false);
 
   const [newImage, setNewImage] = useState("");
+
   const handleImageAdd = async (file: string | Blob) => {
     const formData = new FormData();
     formData.append("image", file);
     try {
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/`,
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/lessons/images/`,
         formData,
         {
           headers: {
@@ -257,10 +381,13 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
 
   const handleImageUpload = async (file: string | Blob, index: number) => {
     const formData = new FormData();
+
+    
     formData.append("image", file);
+
     try {
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/`,
+        `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/upload/lessons/images/`,
         formData,
         {
           headers: {
@@ -325,6 +452,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
 
       if (index === "-") {
         setSelectedImage(imageUrl);
+        setNewImage(imageUrl);
         handleImageAdd(file);
       } else {
         const reader = new FileReader();
@@ -740,18 +868,35 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
 
   return (
     <ScrollableContainer maxWidth={false} sx={{ py: 1 }}>
-      {selectedTopic.content && (
-        <Box display="flex" justifyContent="flex-end" mb={1}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 2,
+          gap: 3,
+        }}
+      >
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+            {selectedLecture?.title || "Lesson Title"}
+          </Typography>
+          <Typography
+            variant="subtitle1"
+            sx={{ fontWeight: 500, color: "text.secondary" }}
+          >
+            {selectedTopic?.title || "Topic Title"}
+          </Typography>
+        </Box>
+
+        {selectedTopic.content && (
           <Button
             variant="contained"
             size="small"
             startIcon={<Add />}
             onClick={handleOpenModal}
             sx={{
-              borderTopRightRadius: 20,
-              borderBottomRightRadius: 20,
-              borderTopLeftRadius: 20,
-              borderBottomLeftRadius: 20,
+              borderRadius: 20,
               minWidth: 100,
               fontSize: "0.75rem",
               textTransform: "capitalize",
@@ -759,8 +904,8 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
           >
             Add Content
           </Button>
-        </Box>
-      )}
+        )}
+      </Box>
       {selectedTopic.content.map((eachContent, index) => (
         <React.Fragment key={index}>
           <Grid container spacing={1} sx={{ mb: 2 }}>
@@ -769,12 +914,16 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                 onClick={() =>
                   document.getElementById(`image-upload-${index}`)?.click()
                 }
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                sx={{ position: "relative" }}
               >
                 <img
                   src={
                     eachContent.image
                       ? eachContent.image.startsWith("data:image") ||
-                        eachContent.image.startsWith("blob:")
+                        eachContent.image.startsWith("blob:") ||
+                        eachContent.image.startsWith("http")
                         ? eachContent.image
                         : `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/image/${eachContent.image}`
                       : `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/camera.png`
@@ -797,6 +946,73 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                   accept="image/*"
                   style={{ display: "none" }}
                 />
+                <Fade in={hoveredIndex === index} timeout={400}>
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      height: "100%",
+                      bgcolor: "rgba(0,0,0,0.5)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 2,
+                      zIndex: 2,
+                      transition: "background 0.3s",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      variant="outlined"
+                      sx={{
+                        mb: 1,
+                        minWidth: 150,
+                        color: "#fff",
+                        borderColor: "rgba(255,255,255,0.7)",
+                        background: "rgba(255,255,255,0.08)",
+                        backdropFilter: "blur(2px)",
+                        fontWeight: 600,
+                        textTransform: "capitalize",
+                        "&:hover": {
+                          background: "rgba(255,255,255,0.18)",
+                          borderColor: "#fff",
+                        },
+                      }}
+                      onClick={() => {
+                        setGalleryOpen(true);
+                        setGallerySelectIndex(index);
+                      }}
+                    >
+                      Select from Gallery
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      sx={{
+                        minWidth: 150,
+                        color: "#fff",
+                        borderColor: "rgba(255,255,255,0.7)",
+                        background: "rgba(255,255,255,0.08)",
+                        backdropFilter: "blur(2px)",
+                        fontWeight: 600,
+                        textTransform: "capitalize",
+                        "&:hover": {
+                          background: "rgba(255,255,255,0.18)",
+                          borderColor: "#fff",
+                        },
+                      }}
+                      onClick={() =>
+                        document
+                          .getElementById(`image-upload-${index}`)
+                          ?.click()
+                      }
+                    >
+                      Select from Local
+                    </Button>
+                  </Box>
+                </Fade>
               </CompactImage>
             </Grid>
 
@@ -897,9 +1113,7 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                       textTransform: "capitalize",
                     }}
                   >
-                    {generatingIndex === index
-                      ? "Generating"
-                      : "Generate spoken text"}
+                    {generatingIndex === index ? "Generating" : "Generate"}
                   </Button>
                 </Box>
               </Box>
@@ -1047,6 +1261,98 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                 gutterBottom
                 sx={{ fontWeight: 500 }}
               >
+                Image
+              </Typography>
+              <Box
+                sx={{
+                  height: "300px",
+                  border: "2px dashed",
+                  borderColor: "divider",
+                  borderRadius: "8px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "background.paper",
+                  transition: "all 0.3s ease",
+                  position: "relative",
+                  gap: 2,
+                  backgroundImage: newImage ? `url(${newImage})` : "none",
+                  backgroundSize: "contain",
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "center",
+                  ...(newImage && {
+                    "&:before": {
+                      content: '""',
+                      position: "absolute",
+                      inset: 0,
+                      bgcolor: "rgba(3, 3, 3, 0.54)",
+                      zIndex: 1,
+                      borderRadius: "8px",
+                    },
+                  }),
+                }}
+              >
+                <input
+                  id="add-image-upload"
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(event) => handleImageSelect(event, "-")}
+                />
+                <Button
+                  variant="outlined"
+                  sx={{
+                    minWidth: 150,
+                    color: newImage ? "#fff" : "primary.main",
+                    borderColor: newImage ? "#fff" : "primary.main",
+                    background: "rgba(25, 118, 210, 0.08)",
+                    fontWeight: 600,
+                    textTransform: "capitalize",
+                    zIndex: 2,
+                    "&:hover": {
+                      background: "rgba(25, 118, 210, 0.18)",
+                      borderColor: newImage ? "#fff" : "primary.main",
+                      color: "#fff",
+                    },
+                  }}
+                  onClick={() => {
+                    setGallerySelectIndex("-");
+                    setGalleryOpen(true);
+                  }}
+                >
+                  Select from Gallery
+                </Button>
+                <Button
+                  variant="outlined"
+                  sx={{
+                    minWidth: 150,
+                    color: newImage ? "#fff" : "primary.main",
+                    borderColor: newImage ? "#fff" : "primary.main",
+                    background: "rgba(25, 118, 210, 0.08)",
+                    fontWeight: 600,
+                    textTransform: "capitalize",
+                    zIndex: 2,
+                    "&:hover": {
+                      background: "rgba(25, 118, 210, 0.18)",
+                      borderColor: newImage ? "#fff" : "primary.main",
+                      color: "#fff",
+                    },
+                  }}
+                  onClick={() =>
+                    document.getElementById("add-image-upload")?.click()
+                  }
+                >
+                  Select from Local
+                </Button>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography
+                variant="subtitle1"
+                gutterBottom
+                sx={{ fontWeight: 500 }}
+              >
                 Content
               </Typography>
               <TextField
@@ -1066,115 +1372,6 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                   },
                 }}
               />
-            </Grid>
-
-            <Grid item xs={12} md={6}>
-              <Typography
-                variant="subtitle1"
-                gutterBottom
-                sx={{ fontWeight: 500 }}
-              >
-                Image
-              </Typography>
-              <Box
-                component="label"
-                htmlFor="image-upload"
-                sx={{
-                  height: "300px",
-                  border: "2px dashed",
-                  borderColor: "divider",
-                  borderRadius: "8px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "background.paper",
-                  transition: "all 0.3s ease",
-                  cursor: "pointer",
-                  "&:hover": {
-                    borderColor: "primary.main",
-                    backgroundColor: "action.hover",
-                  },
-                }}
-              >
-                <input
-                  id="image-upload"
-                  type="file"
-                  hidden
-                  accept="image/*"
-                  onChange={(event) => handleImageSelect(event, "-")}
-                />
-                {selectedImage ? (
-                  <Box
-                    sx={{
-                      width: "100%",
-                      height: "100%",
-                      position: "relative",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <img
-                      src={selectedImage}
-                      alt="Preview"
-                      onError={(e) => {
-                        e.currentTarget.src = `${process.env.NEXT_PUBLIC_V2_SERVER_URL}/static/camera.png`;
-                      }}
-                      style={{
-                        maxWidth: "100%",
-                        maxHeight: "100%",
-                        objectFit: "contain",
-                      }}
-                      onLoad={() => {
-                        URL.revokeObjectURL(selectedImage);
-                      }}
-                    />
-                  </Box>
-                ) : (
-                  <Box
-                    sx={{
-                      textAlign: "center",
-                      p: 2,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: "48px",
-                        height: "48px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        mb: 2,
-                      }}
-                    >
-                      <svg
-                        width="100%"
-                        height="100%"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          d="M19 13H13V19H11V13H5V11H11V5H13V11H19V13Z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </Box>
-                    <Typography
-                      variant="body1"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      Drag & drop an image here or click to browse
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
             </Grid>
           </Grid>
         </DialogContent>
@@ -1215,6 +1412,47 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <MuiDialog
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Select Image from Gallery</DialogTitle>
+        <DialogContent>
+          {galleryLoading ? (
+            <Box
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              minHeight={200}
+            >
+              <CircularProgress />
+            </Box>
+          ) : (
+            <ImageList cols={3} gap={12}>
+              {galleryImages.map((img, i) => (
+                <ImageListItem key={i} sx={{ cursor: "pointer" }}>
+                  <img
+                    src={img.image_path}
+                    alt={img.description || `Gallery ${i}`}
+                    style={{ width: "100%", borderRadius: 8 }}
+                    onClick={() => {
+                      if (gallerySelectIndex !== null) {
+                        handleGallerySelect(img.image_path, gallerySelectIndex);
+                      }
+                    }}
+                  />
+                </ImageListItem>
+              ))}
+            </ImageList>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setGalleryOpen(false)}>Cancel</Button>
+        </DialogActions>
+      </MuiDialog>
 
       <Snackbar
         open={snackbar.open}
