@@ -83,31 +83,24 @@ const handleAPICall = async <T = any,>({
 };
 
 export const useAxiosHandler = () => {
-  const getAxiosHandler = useCallback(
-    async <T = any,>({
-      url,
-      notify = true,
-      extra,
-      queryParam,
-      signal,
-    }: GetHandlerParams): Promise<{
-      data: T | null;
-      status: number;
-      error: string | null;
-    }> => {
-      const { data, status, error } = await handleAPICall<T>({
-        url,
-        method: "get",
-        extra,
-        queryParam,
-        signal,
-      });
+  const getAxiosHandler = async <T = any,>({
+  url,
+  notify = true,
+  successMessage,
+}: {
+  url: string;
+  notify?: boolean;
+  successMessage?: string;
+}): Promise<ApiResponse<T>> => {
+  const { data, status, error, success, message } = await handleAPICall<T>({
+    url,
+    method: "get",
+  });
 
-      if (notify && error) Notify().error(error);
-      return { data, status, error };
-    },
-    []
-  );
+  if (notify && success) Notify().success(successMessage || message || "");
+  if (notify && error) Notify().error(error || "");
+  return { data, status, error, success, message };
+};
 
   const postAxiosHandler = async <T = any,>({
     url,
@@ -138,6 +131,23 @@ export const useAxiosHandler = () => {
       DATA,
     });
 
+    if (notify && success) Notify().success(successMessage || message || "");
+    if (notify && error) Notify().error(error || "");
+    return { data, status, error, success, message };
+  };
+
+  const updateAxiosHandler = async <T = any,>({
+    url,
+    notify = true,
+    DATA,
+    successMessage,
+  }: PostPutDeleteHandlerParams): Promise<ApiResponse<T>> => {
+    const { data, status, error, success, message } = await handleAPICall<T>({
+      url,
+      method: "put",
+      DATA,
+    });
+  
     if (notify && success) Notify().success(successMessage || message || "");
     if (notify && error) Notify().error(error || "");
     return { data, status, error, success, message };
