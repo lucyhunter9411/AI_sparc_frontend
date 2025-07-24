@@ -817,6 +817,7 @@ export default function Layout({ children }: LayoutProps) {
         ) : lessonLoading ? (
           <>
             <Box sx={{ p: 2 }}>
+              {/* Lecture skeleton */}
               <Box sx={{ mb: 3 }}>
                 <Skeleton
                   variant="rounded"
@@ -824,6 +825,7 @@ export default function Layout({ children }: LayoutProps) {
                   height={40}
                   sx={{ mb: 1 }}
                 />
+                {/* Topics skeletons */}
                 <Box sx={{ pl: 3 }}>
                   <Skeleton
                     variant="rounded"
@@ -840,6 +842,7 @@ export default function Layout({ children }: LayoutProps) {
                   <Skeleton variant="rounded" width="70%" height={30} />
                 </Box>
               </Box>
+              {/* Second lecture skeleton */}
               <Box sx={{ mb: 3 }}>
                 <Skeleton
                   variant="rounded"
@@ -847,6 +850,7 @@ export default function Layout({ children }: LayoutProps) {
                   height={40}
                   sx={{ mb: 1 }}
                 />
+                {/* Topics skeletons */}
                 <Box sx={{ pl: 3 }}>
                   <Skeleton
                     variant="rounded"
@@ -980,7 +984,7 @@ export default function Layout({ children }: LayoutProps) {
                 margin: "0 auto",
                 fontWeight: 600,
                 textTransform: "uppercase",
-                fontSize: "1.1rem",
+                fontSize: "1.3rem",
               }}
             >
               SPARC

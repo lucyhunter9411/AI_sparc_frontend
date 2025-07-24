@@ -15,6 +15,7 @@ import {
   ThemeProvider,
   createTheme,
   useMediaQuery,
+  Alert,
 } from "@mui/material";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import { useRouter } from "next/navigation";
@@ -24,6 +25,7 @@ import { useFormik } from "formik";
 import { UseContext } from "@/state/provider";
 import { safeLocalStorage } from "../utils/storage";
 import { signUp } from "../auth/auth";
+import SnackbarAlert from "@/component/snackbar";
 
 const theme = createTheme({
   palette: {
@@ -81,13 +83,28 @@ const validationSchema = yup.object({
     .required("You must accept the terms and conditions"),
 });
 
+interface SignUpSnackbarState {
+  open: boolean;
+  message: string;
+  severity: "success" | "error";
+}
+
 const SignUpPage = () => {
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<SignUpSnackbarState>({
+    open: false,
+    message: "",
+    severity: "success",
+  });
+  const [signupError, setSignupError] = useState<string | null>(null);
   const router = useRouter();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const { setToken } = UseContext();
+
+  const handleSnackbarClose = () =>
+    setSnackbar((prev) => ({ ...prev, open: false }));
 
   const formik = useFormik({
     initialValues: {
@@ -107,15 +124,18 @@ const SignUpPage = () => {
           password: values.password,
         });
 
-        console.log("Account created successfully");
-        router.push("/login");
+        setSnackbar({
+          open: true,
+          message: "Account created successfully!",
+          severity: "success",
+        });
+        setTimeout(() => router.push("/login"), 1200);
       } catch (error: any) {
-        console.error(
-          "Signup failed:",
-          error.response?.data?.detail || "Failed to create account"
-        );
-        // You can set formik errors here if the API returns validation errors
-        // formik.setErrors({ email: "Email already exists" });
+        const errorMsg =
+          error.response?.data?.detail || "Failed to create account";
+        
+        setSignupError(errorMsg);
+
       } finally {
         setIsLoading(false);
       }
@@ -133,6 +153,13 @@ const SignUpPage = () => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <SnackbarAlert
+        open={snackbar.open}
+        message={snackbar.message}
+        severity={snackbar.severity}
+        onClose={handleSnackbarClose}
+        autoHideDuration={4000}
+      />
       <Grid
         container
         sx={{
@@ -246,7 +273,8 @@ const SignUpPage = () => {
             <Typography variant="subtitle1" color="text.secondary">
               Create your account
             </Typography>
-            <Divider sx={{ width: "100%", my: 3 }} />
+            <Divider sx={{ width: "100%", my: 1 }} />
+
             <Box
               sx={{
                 width: "100%",
@@ -346,6 +374,11 @@ const SignUpPage = () => {
                   }}
                   sx={{ mt: 2 }}
                 />
+                {signupError && (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    {signupError}
+                  </Alert>
+                )}
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -353,7 +386,6 @@ const SignUpPage = () => {
                       onChange={formik.handleChange}
                       name="acceptTerms"
                       color="primary"
-                      required
                     />
                   }
                   label={

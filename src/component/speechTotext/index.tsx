@@ -265,6 +265,8 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
   const showOverlay = isListening || isThinking;
 
   const [micUsed, setMicUsed] = useState(false);
+  const [audioChunks, setAudioChunks] = useState<{ [key: number]: number[] }>({});
+  const audioProcessedRef = useRef(false);
 
   const mediaRecorderRef = useRef<{
     stream: MediaStream;
@@ -429,6 +431,15 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
       setCurrentAudio(null);
     }
   }, [language, sttMethod]);
+
+  
+  // Add a flag to track if audio has been processed
+  const [audioProcessed, setAudioProcessed] = useState(false);
+
+  // Reset the flag when starting to receive new audio chunks
+  useEffect(() => {
+    setAudioProcessed(false);
+  }, [wsRef.current]); // Reset when a new WebSocket connection is established
 
   const LoadingSpinner = () => (
     <Box
@@ -619,33 +630,87 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
           ]);
         } else if (data.type === "model" && data.text) {
           setIsThinking(false);
-          // Process the response text and audio
-          setMessages((prevMessages) => [
-            ...prevMessages,
-            {
-              id: prevMessages.length + 1,
-              text: data.text,
-              sender: "Teacher Bot",
-              timestamp: new Date().toISOString(),
-              type: "model",
-              isOwn: false,
-              answer: true,
-              image_path: data.image_path,
-              language: language,
-              length: data.text ? data.text.length : 0,
-            },
-          ]);
           if (data.audio) {
-            // const audio = new Audio(`data:audio/webm;base64,${data.audio}`);
-
+            // Process the response text and audio
+            setMessages((prevMessages) => [
+              ...prevMessages,
+              {
+                id: prevMessages.length + 1,
+                text: data.text,
+                sender: "Teacher Bot",
+                timestamp: new Date().toISOString(),
+                type: "model",
+                isOwn: false,
+                answer: true,
+                image_path: data.image_path,
+                language: language,
+                length: data.text ? data.text.length : 0,
+              },
+            ]);
+            if (currentAudio) {
+              currentAudio.pause();
+              currentAudio.currentTime = 0;
+              setCurrentAudio(null);
+            }
             const byteArray = new Uint8Array(data.audio); // Convert list of bytes to Uint8Array
             const blob = new Blob([byteArray], { type: "audio/webm" }); // Create a Blob from the Uint8Array
             const url = URL.createObjectURL(blob); // Create an Object URL from the Blob
             const audio = new Audio(url); // Use the Object URL to create the Audio object
 
-            setCurrentAudio(audio);
-            audio.play().catch((error) => {
-              console.error("Error playing audio:", error);
+            setTimeout(() => {
+              setCurrentAudio(audio);
+              audio.play().catch((error) => {
+                console.error("Error playing audio:", error);
+              });
+            }, 100);
+          }
+          if (data.audio_chunk) {
+            const { sequence_number, total_chunks, data: chunkData } = data.audio_chunk;
+            setAudioProcessed(false);
+      
+            // Accumulate chunks
+            setAudioChunks((prevChunks) => {
+              const newChunks = { ...prevChunks };
+              newChunks[sequence_number] = chunkData;
+              console.log("Updated keys:", Object.keys(newChunks));
+              console.log("Updated length:", Object.keys(newChunks).length);
+          
+              // Check if all chunks are received
+              if (!audioProcessedRef.current && Object.keys(newChunks).length === total_chunks) {
+                audioProcessedRef.current = true; // Mark as processing to prevent re-entry
+                const flatChunks = Object.keys(newChunks)
+                  .sort((a, b) => Number(a) - Number(b))
+                  .reduce<number[]>((acc, key) => acc.concat(newChunks[Number(key)]), []);
+                const audioBytes = new Uint8Array(flatChunks);
+                const audioBlob = new Blob([audioBytes], { type: "audio/webm" });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                setCurrentAudio(audio);
+                audio.play().catch((err) => console.error("Error playing audio:", err));
+                setAudioChunks({});
+                setMessages((prevMessages) => [
+                  ...prevMessages,
+                  {
+                    id: prevMessages.length + 1,
+                    text: data.text,
+                    sender: "Teacher Bot",
+                    timestamp: new Date().toISOString(),
+                    type: "model",
+                    isOwn: false,
+                    answer: true,
+                    image_path: data.image_path,
+                    language: language,
+                    length: data.text ? data.text.length : 0,
+                  },
+                ]);
+          
+                // Add a delay before allowing processing again
+                setTimeout(() => {
+                  audioProcessedRef.current = false; // Allow processing again after delay
+                  setAudioProcessed(true); // Update state if needed
+                }, 1000); // 1000 milliseconds = 1 second
+              }
+              return newChunks;
             });
           }
         } else {
