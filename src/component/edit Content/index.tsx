@@ -935,7 +935,8 @@ const ContentCreator: React.FC<ContentCreatorProps> = ({
                   style={{
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
+                    objectFit: "contain",
+                    background: "#fff",
                   }}
                   alt="Content"
                 />

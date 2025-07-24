@@ -21,6 +21,11 @@ interface WebSocketData {
   text?: string;
   type?: string;
   audio?: string;
+  // audio_chunk?: {
+  //   sequence_number: number;
+  //   total_chunks: number;
+  //   data: number[];
+  // }; // Add this for the new audio chunk structure
   image?: string;
 }
 
@@ -42,6 +47,8 @@ const useLectureStarter = ({
   const [ws, setWs] = useState<WebSocket | null>(null);
 
   const { minutes, seconds, start: startTimer, stop: stopTimer } = useTimer();
+
+  // const [audioChunks, setAudioChunks] = useState<Record<number, number[]>>({});
 
   const handleStart = (lectureId: string, topicId: string) => {
     if (ws) {
@@ -144,6 +151,41 @@ const useLectureStarter = ({
                         console.error("Error playing audio:", err)
                       );
                   }
+                  // if (data.audio_chunk) {
+                  //   const { sequence_number, total_chunks, data: chunkData } = data.audio_chunk;
+                
+                  //   // Accumulate chunks
+                  //   setAudioChunks((prevChunks) => {
+                  //     const newChunks = { ...prevChunks };
+                  //     newChunks[sequence_number] = chunkData;
+                  //     return newChunks;
+                  //   });
+                
+                  //   // Check if all chunks are received
+                  //   if (Object.keys(audioChunks).length === total_chunks) {
+                  //     // Flatten the chunks
+                  //     const flatChunks = Object.keys(audioChunks)
+                  //       .sort((a, b) => Number(a) - Number(b))
+                  //       .reduce<number[]>((acc, key) => acc.concat(audioChunks[Number(key)]), []);
+                
+                  //     // Convert to Uint8Array
+                  //     const audioBytes = new Uint8Array(flatChunks);
+                
+                  //     // Create a Blob
+                  //     const audioBlob = new Blob([audioBytes], { type: "audio/wav" });
+                
+                  //     // Create an Object URL
+                  //     const audioUrl = URL.createObjectURL(audioBlob);
+                
+                  //     // Play the audio
+                  //     const audio = new Audio(audioUrl);
+                  //     setCurrentAudio(audio);
+                  //     audio.play().catch((err) => console.error("Error playing audio:", err));
+                
+                  //     // Clear the chunks
+                  //     setAudioChunks({});
+                  //   }
+                  // }
                 } else if (data.type === "static") {
                   setDisabledTyping(true);
                   setMessages((prev) => [
