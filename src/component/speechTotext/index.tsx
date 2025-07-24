@@ -405,25 +405,22 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
   }));
 
   const isLessonMode = !!curLectureId;
+  // 🔄 Auto-scroll to latest message
   useEffect(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "end",
-      });
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [messages]);
-
-  useEffect(() => {
+  
+    // Stop loading once messages are received
     if (messages.length > 0) {
       setIsLoading(false);
     }
-  }, [messages, setIsLoading]);
-
-  useEffect(() => {
+  
+    // Determine if current message is the last one
     setIsLastMessage(currentSlideIndex === messages.length - 1);
-  }, [currentSlideIndex, messages]);
-
+  }, [messages, currentSlideIndex, setIsLoading, setIsLastMessage]);
+  
+  // 🎧 Reset audio when language or STT method changes
   useEffect(() => {
     if (currentAudio) {
       currentAudio.pause();
@@ -431,15 +428,11 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
       setCurrentAudio(null);
     }
   }, [language, sttMethod]);
-
   
-  // Add a flag to track if audio has been processed
-  const [audioProcessed, setAudioProcessed] = useState(false);
-
-  // Reset the flag when starting to receive new audio chunks
+  // 🔁 Reset audio processing flag when WebSocket ref changes
   useEffect(() => {
     setAudioProcessed(false);
-  }, [wsRef.current]); // Reset when a new WebSocket connection is established
+  }, [wsRef.current]);
 
   const LoadingSpinner = () => (
     <Box
@@ -557,55 +550,46 @@ const SpeechRecognizer: React.FC<SpeechRecognizerProps> = ({
 
       wsk.onopen = async () => {
         setWebSocketState("connected");
-
         console.log("WebSocket connection established, sending audio...");
-        wsk.send(
-          JSON.stringify({
-            type: "register",
-            data: {
-              robot_id: connectrobot, // Use the correct variable for robot_id
-              client: "frontend", // Lets server distinguish roles
-            },
-            ts: Date.now(), // Use Date.now() for the current timestamp
-          })
-        );
-
-        // const reader = new FileReader();
-        // reader.readAsDataURL(audioBlob);
-        // reader.onloadend = () => {
-        //   const base64Audio = (reader.result as string).split(",")[1];
-
-        //   wsk.send(
-        //     JSON.stringify({
-        //       type: "speech",
-        //       data: {
-        //         robot_id: connectrobot,
-        //         audio: base64Audio,
-        //         backend: sttMethod,
-        //       },
-        //       ts: Date.now(), // Use Date.now() for the current timestamp
-        //     })
-        //   );
-        // };
-
-        // Convert the Blob to an ArrayBuffer
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        // Convert the ArrayBuffer to a Uint8Array
+      
+        sendRegisterMessage(wsk, connectrobot);
+        await sendAudioMessage(wsk, audioBlob, connectrobot, sttMethod);
+      };
+      
+      // 🔧 Helper to send register payload
+      const sendRegisterMessage = (ws: WebSocket, robotId: string) => {
+        const message = {
+          type: "register",
+          data: {
+            robot_id: robotId,
+            client: "frontend",
+          },
+          ts: Date.now(),
+        };
+        ws.send(JSON.stringify(message));
+      };
+      
+      // 🔧 Helper to convert blob and send audio message
+      const sendAudioMessage = async (
+        ws: WebSocket,
+        blob: Blob,
+        robotId: string,
+        backend: string
+      ) => {
+        const arrayBuffer = await blob.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
-        // Convert Uint8Array to a regular array for JSON serialization
         const byteArray = Array.from(uint8Array);
-        // Send the byte array as part of the JSON message
-        wsk.send(
-          JSON.stringify({
-            type: "speech",
-            data: {
-              robot_id: connectrobot,
-              audio: byteArray,
-              backend: sttMethod,
-            },
-            ts: Date.now(), // Use Date.now() for the current timestamp
-          })
-        );
+      
+        const message = {
+          type: "speech",
+          data: {
+            robot_id: robotId,
+            audio: byteArray,
+            backend,
+          },
+          ts: Date.now(),
+        };
+        ws.send(JSON.stringify(message));
       };
 
       wsk.onmessage = (event) => {
