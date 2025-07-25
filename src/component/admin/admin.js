@@ -433,15 +433,6 @@ const AdminPage = () => {
     setPrompt(event.target.value);
   };
 
-  // Function to close the modal
-  const handleApply = () => {
-    setOpen(false);
-    axios.post(
-      "https://app-ragbackend-dev-wus-001.azurewebsites.net/promptGenerate/",
-      new URLSearchParams({ prompt: myPrompt }),
-      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
-    );
-  };
   //Add Content
   const [isAddContent, setAddContent] = useState(false);
   const addContent = () => {
@@ -483,10 +474,6 @@ const AdminPage = () => {
       text: newContent,
       image: newImage,
       time: 0,
-      audio: "",
-      EnglishText: "",
-      HindiText: "",
-      TeluguText: "",
       EnglishTime: 0,
       HindiTime: 0,
       TeluguTime: 0,
@@ -528,15 +515,6 @@ const AdminPage = () => {
         console.log("Network Error!!!");
       });
   };
-  //Add Topic
-  const [isAddTopic, setAddTopic] = useState(false);
-  const [curAddLectureID, setAddLectureID] = useState("");
-  const addTopic = (lecture_id) => {
-    setAddContentTitle("");
-    setAddQATime(0);
-    setAddTopic(true);
-    setAddLectureID(lecture_id);
-  };
 
   const handleAddTopicCancel = () => {
     setAddTopic(false);
@@ -556,20 +534,6 @@ const AdminPage = () => {
     );
     send_data.append("qna_time", parseInt(addQATime) || 0);
 
-    axios
-      .post(
-        "https://app-ragbackend-dev-wus-001.azurewebsites.net/addTopic/",
-        send_data,
-        {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        }
-      )
-      .then(function (res) {
-        console.log(res.data.topic);
-
-        setTopics(res.data.topic);
-        setAddTopic(false);
-      });
   };
 
   const [curField, setCurField] = useState("content");
